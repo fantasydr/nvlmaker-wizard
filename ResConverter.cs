@@ -27,6 +27,11 @@ namespace ResConverter
         // Àı∑≈÷ ¡ø
         [XmlAttribute]
         public string quality = QUALITY_DEFAULT;
+
+        public override string ToString()
+        {
+            return path;
+        }
     }
 
     [XmlRootAttribute("Config", IsNullable = false)]
