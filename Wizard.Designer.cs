@@ -141,25 +141,39 @@ namespace ResConverter
             // 
             // cbResolution
             // 
+            this.cbResolution.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cbResolution.FormattingEnabled = true;
             this.cbResolution.Location = new System.Drawing.Point(17, 20);
             this.cbResolution.Name = "cbResolution";
             this.cbResolution.Size = new System.Drawing.Size(190, 20);
             this.cbResolution.TabIndex = 8;
+            this.cbResolution.SelectedIndexChanged += new System.EventHandler(this.cbResolution_SelectedIndexChanged);
             // 
             // numWidth
             // 
             this.numWidth.Location = new System.Drawing.Point(37, 46);
+            this.numWidth.Maximum = new decimal(new int[] {
+            3200,
+            0,
+            0,
+            0});
             this.numWidth.Name = "numWidth";
             this.numWidth.Size = new System.Drawing.Size(71, 21);
             this.numWidth.TabIndex = 7;
+            this.numWidth.ValueChanged += new System.EventHandler(this.numResolution_ValueChanged);
             // 
             // numHeight
             // 
             this.numHeight.Location = new System.Drawing.Point(136, 46);
+            this.numHeight.Maximum = new decimal(new int[] {
+            3200,
+            0,
+            0,
+            0});
             this.numHeight.Name = "numHeight";
             this.numHeight.Size = new System.Drawing.Size(71, 21);
             this.numHeight.TabIndex = 6;
+            this.numHeight.ValueChanged += new System.EventHandler(this.numResolution_ValueChanged);
             // 
             // gbStep3
             // 
@@ -183,6 +197,7 @@ namespace ResConverter
             this.checkFolder.TabIndex = 15;
             this.checkFolder.Text = "单独设定目录名";
             this.checkFolder.UseVisualStyleBackColor = true;
+            this.checkFolder.CheckedChanged += new System.EventHandler(this.checkFolder_CheckedChanged);
             // 
             // txtFolderName
             // 
@@ -198,9 +213,9 @@ namespace ResConverter
             this.txtProjectName.Location = new System.Drawing.Point(91, 74);
             this.txtProjectName.MaxLength = 64;
             this.txtProjectName.Name = "txtProjectName";
-            this.txtProjectName.ReadOnly = true;
             this.txtProjectName.Size = new System.Drawing.Size(190, 21);
             this.txtProjectName.TabIndex = 13;
+            this.txtProjectName.TextChanged += new System.EventHandler(this.txtProjectName_TextChanged);
             // 
             // label5
             // 
@@ -274,7 +289,7 @@ namespace ResConverter
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(791, 509);
+            this.ClientSize = new System.Drawing.Size(392, 271);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.btnPrev);
             this.Controls.Add(this.btnNext);
