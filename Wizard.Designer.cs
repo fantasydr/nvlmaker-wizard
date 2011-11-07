@@ -219,6 +219,7 @@ namespace ResConverter
             this.btnOK.TabIndex = 10;
             this.btnOK.Text = "完成";
             this.btnOK.UseVisualStyleBackColor = true;
+            this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
             // 
             // gbStep4
             // 
@@ -247,6 +248,7 @@ namespace ResConverter
             this.btnCancel.TabIndex = 16;
             this.btnCancel.Text = "取消";
             this.btnCancel.UseVisualStyleBackColor = true;
+            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
             // btnPrev
             // 
