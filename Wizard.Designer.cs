@@ -45,6 +45,7 @@ namespace ResConverter
             this.txtProjectName = new System.Windows.Forms.TextBox();
             this.label5 = new System.Windows.Forms.Label();
             this.btnOK = new System.Windows.Forms.Button();
+            this.btnExit = new System.Windows.Forms.Button();
             this.gbStep4 = new System.Windows.Forms.GroupBox();
             this.txtReport = new System.Windows.Forms.TextBox();
             this.btnCancel = new System.Windows.Forms.Button();
@@ -71,12 +72,14 @@ namespace ResConverter
             // 
             // txtTemplate
             // 
-            this.txtTemplate.Location = new System.Drawing.Point(190, 19);
+            this.txtTemplate.Location = new System.Drawing.Point(122, 19);
             this.txtTemplate.Multiline = true;
             this.txtTemplate.Name = "txtTemplate";
             this.txtTemplate.ReadOnly = true;
-            this.txtTemplate.Size = new System.Drawing.Size(165, 185);
+            this.txtTemplate.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            this.txtTemplate.Size = new System.Drawing.Size(233, 185);
             this.txtTemplate.TabIndex = 15;
+            this.txtTemplate.WordWrap = false;
             // 
             // lstTemplate
             // 
@@ -84,8 +87,9 @@ namespace ResConverter
             this.lstTemplate.ItemHeight = 12;
             this.lstTemplate.Location = new System.Drawing.Point(16, 20);
             this.lstTemplate.Name = "lstTemplate";
-            this.lstTemplate.Size = new System.Drawing.Size(168, 184);
+            this.lstTemplate.Size = new System.Drawing.Size(100, 184);
             this.lstTemplate.TabIndex = 3;
+            this.lstTemplate.SelectedIndexChanged += new System.EventHandler(this.lstTemplate_SelectedIndexChanged);
             // 
             // gbStep2
             // 
@@ -118,8 +122,10 @@ namespace ResConverter
             this.txtResolution.Multiline = true;
             this.txtResolution.Name = "txtResolution";
             this.txtResolution.ReadOnly = true;
+            this.txtResolution.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             this.txtResolution.Size = new System.Drawing.Size(190, 130);
             this.txtResolution.TabIndex = 13;
+            this.txtResolution.WordWrap = false;
             // 
             // label2
             // 
@@ -236,6 +242,16 @@ namespace ResConverter
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
             // 
+            // btnExit
+            // 
+            this.btnExit.Location = new System.Drawing.Point(302, 234);
+            this.btnExit.Name = "btnExit";
+            this.btnExit.Size = new System.Drawing.Size(80, 32);
+            this.btnExit.TabIndex = 10;
+            this.btnExit.Text = "结束";
+            this.btnExit.UseVisualStyleBackColor = true;
+            this.btnExit.Click += new System.EventHandler(this.btnCancel_Click);
+            // 
             // gbStep4
             // 
             this.gbStep4.Controls.Add(this.txtReport);
@@ -252,8 +268,10 @@ namespace ResConverter
             this.txtReport.Multiline = true;
             this.txtReport.Name = "txtReport";
             this.txtReport.ReadOnly = true;
+            this.txtReport.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             this.txtReport.Size = new System.Drawing.Size(338, 185);
             this.txtReport.TabIndex = 15;
+            this.txtReport.WordWrap = false;
             // 
             // btnCancel
             // 
@@ -295,12 +313,14 @@ namespace ResConverter
             this.Controls.Add(this.btnNext);
             this.Controls.Add(this.gbStep3);
             this.Controls.Add(this.btnOK);
+            this.Controls.Add(this.btnExit);
             this.Controls.Add(this.gbStep4);
             this.Controls.Add(this.gbStep2);
             this.Controls.Add(this.gbStep1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
             this.Name = "Wizard";
             this.Text = "项目新建向导";
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Wizard_FormClosing);
             this.gbStep1.ResumeLayout(false);
             this.gbStep1.PerformLayout();
             this.gbStep2.ResumeLayout(false);
@@ -334,6 +354,7 @@ namespace ResConverter
         private System.Windows.Forms.TextBox txtTemplate;
         private System.Windows.Forms.ListBox lstScale;
         private System.Windows.Forms.Button btnOK;
+        private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.GroupBox gbStep4;
         private System.Windows.Forms.TextBox txtReport;
         private System.Windows.Forms.Button btnCancel;

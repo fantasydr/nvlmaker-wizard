@@ -32,6 +32,11 @@ namespace ResConverter
         {
             return path;
         }
+
+        public ResFile(string path)
+        {
+            this.path = path;
+        }
     }
 
     [XmlRootAttribute("Config", IsNullable = false)]
@@ -59,7 +64,7 @@ namespace ResConverter
                     ResConfig obj = (ResConfig)serializer.Deserialize(r);
                     r.Close();
 
-                    obj.path = filename;
+                    obj.path = Path.GetDirectoryName(filename);
                     return obj;
                 }
             }
@@ -99,12 +104,21 @@ namespace ResConverter
         }
 
         // 按照配置转换指定的资源
-        public void Start(ResConfig config, int destWidth, int destHeight, string destFolder)
+        public void Start( // 资源文件列表
+                           ResConfig config,
+                           // 目标路径
+                           string destFolder,
+                           // 源屏幕大小
+                           int srcWidth, int srcHeight,
+                           // 目标屏幕大小
+                           int destWidth, int destHeight )
         {
-            if (destWidth <= 0 || destHeight <= 0) return;
+            // 忽略无效参数
+            if (srcWidth <= 0 || srcHeight <= 0 || destWidth <= 0 || destHeight <= 0)
+                return;
 
             // 以root为根目录载入所有图片并缩放
-            string baseDir = Path.GetDirectoryName(config.path);
+            string baseDir = config.path;
             foreach (ResFile file in config.files)
             {
                 string inputFile = Path.GetFullPath(Path.Combine(baseDir, file.path));
@@ -116,17 +130,29 @@ namespace ResConverter
                     continue;
                 }
 
+                // 选择质量参数
                 Quality q = Quality.HIGH;
-                if (file.quality.ToLower() == ResFile.QUALITY_LOW) q = Quality.LOW;
-                else if (file.quality.ToLower() == ResFile.QUALITY_NORMAL) q = Quality.NORMAL;
+                if (file.quality.ToLower() == ResFile.QUALITY_LOW)
+                    q = Quality.LOW;
+                else if (file.quality.ToLower() == ResFile.QUALITY_NORMAL)
+                    q = Quality.NORMAL;
 
                 try
                 {
+                    // 读取源图片
                     Bitmap source = new Bitmap(inputFile);
-                    Bitmap dest = Scale(source, destWidth, destHeight, q,
-                                        CalcRects(file, destWidth, destHeight));
 
-                    dest.Save(destFile, source.RawFormat);
+                    // 根据策略计算区域映射（尚未实现）
+                    Dictionary<Rectangle, Rectangle> rects =
+                        CalcRects(source, srcWidth, srcHeight, destWidth, destHeight);
+
+                    // 实施转换
+                    Bitmap dest = Scale(source, srcWidth, srcHeight, destWidth, destHeight, q, rects);
+
+                    if(dest != null)
+                    {
+                        dest.Save(destFile, source.RawFormat);
+                    }
 
                     // 转换完毕
 
@@ -134,24 +160,41 @@ namespace ResConverter
                 catch (System.Exception e)
                 {
                     // 转换出现错误
+                    Console.WriteLine(e.Message);
                 }
             }
         }
 
         // 根据策略计算区域映射
-        Dictionary<Rectangle, Rectangle> CalcRects(ResFile file, int destWidth, int destHeight)
+        Dictionary<Rectangle, Rectangle> CalcRects( Bitmap source,
+                                                    // 源屏幕大小
+                                                    int srcWidth, int srcHeight,
+                                                    // 目标屏幕大小
+                                                    int destWidth, int destHeight )
         {
-            // 根据策略计算区域映射
+            // 尚未实现
             return null;
         }
 
         // 根据给定的区域映射和质量参数，将源图片缩放到目标大小
-        Bitmap Scale(Image source, int destWidth, int destHeight, Quality q,
-                                Dictionary<Rectangle, Rectangle> rects)
+        Bitmap Scale( Image source,
+                      // 源屏幕大小
+                      int srcWidth, int srcHeight,
+                      // 目标屏幕大小
+                      int destWidth, int destHeight,
+                      // 转换质量
+                      Quality q,
+                      // 转换区域映射
+                      Dictionary<Rectangle, Rectangle> rects)
         {
-            if (destWidth <= 0 || destHeight <= 0) return null;
+            // 忽略无效参数
+            if (srcWidth <= 0 || srcHeight <= 0 || destWidth <= 0 || destHeight <= 0)
+                return null;
 
-            Bitmap dest = new Bitmap(destWidth, destHeight);
+            int realWidth =  (source.Width * destWidth) / srcWidth;
+            int realHeight = (source.Height * destHeight) / srcHeight;
+
+            Bitmap dest = new Bitmap(realWidth, realHeight);
             using (Graphics g = Graphics.FromImage(dest))
             {
                 // 根据质量参数决定缩放算法
@@ -177,14 +220,14 @@ namespace ResConverter
                 if (rects == null || rects.Count == 0)
                 {
                     // 直接缩放到指定的大小
-                    g.DrawImage(source, 0, 0, destWidth, destHeight);
+                    g.DrawImage(source, 0, 0, realWidth, realHeight);
                 }
                 else
                 {
                     // 按照规划的区域缩放
                     foreach (KeyValuePair<Rectangle, Rectangle> kp in rects)
                     {
-                        if (kp.Value.Left >= destWidth || kp.Value.Top >= destHeight)
+                        if (kp.Value.Left >= realWidth || kp.Value.Top >= realHeight)
                         {
                             // 忽略无效数据
                             continue;

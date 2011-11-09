@@ -6,15 +6,18 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 using System.IO;
+using System.Threading;
 
 namespace ResConverter
 {
     public partial class Wizard : Form
     {
-        const string SKIN_FOLDER = "\\skin";
+        const string THEME_FOLDER = "\\skin";
         const string TEMPLATE_FOLDER = "\\project\\template";
+        const string DATA_FOLDER = "\\data";
         const string PROJECT_FOLDER = "\\project";
-        const string NAME_DEFAULT_SKIN = "默认皮肤";
+
+        const string NAME_DEFAULT_THEME = "默认皮肤";
         const string NAME_CUSTOM_RESOLUTION = "(自定义)";
 
         // 分辨率设置对象
@@ -74,56 +77,72 @@ namespace ResConverter
             }
         }
 
+        // 项目向导配置对象
         class ProjectConfig
         {
             #region 数据成员
-            public string _baseFolder = string.Empty; // nvlmaker根目录
-            public string _themeFolder = string.Empty; // 皮肤目录名
+            private string _baseFolder = string.Empty; // nvlmaker根目录
+            private string _themeName = string.Empty; // 皮肤目录名
 
             public int _height; // 分辨率-高度
             public int _width;  // 分辨率-宽度
 
-            public string _projectName = string.Empty;     // 项目名称
-            public string _projectFolder = string.Empty;   // 项目目录，空则取名称作为目录
+            private string _projectName = string.Empty;     // 项目名称
+            private string _projectFolder = string.Empty;   // 项目目录，空则取名称作为目录
 
             // 目前缩放就按默认做
-            public string _scaler = ResFile.SCALER_DEFAULT; // 缩放策略，目前只有这种:(
-            public string _quality = ResFile.QUALITY_DEFAULT;   // 缩放质量，默认是高
+            private string _scaler = ResFile.SCALER_DEFAULT; // 缩放策略，目前只有这种:(
+            private string _quality = ResFile.QUALITY_DEFAULT;   // 缩放质量，默认是高
             #endregion
 
-            // nvlmaker根目录
+            // nvlmaker根路径
             public string BaseFolder
             {
                 get
                 {
-                    // 处理下，保证不为空指针或空白字串
-                    _baseFolder = (_baseFolder == null ? string.Empty : _baseFolder.Trim());
                     // 软件根目录绝对路径，不包括结尾的 “\”
-                    return Path.GetFullPath(_baseFolder);
+                    return _baseFolder;
+                }
+                set
+                {
+                    // 处理下，保证不为空指针或空白字串
+                    _baseFolder = (value == null ? string.Empty : value.Trim());
                 }
             }
 
-            // 皮肤目录
+            // 皮肤名称
+            public string ThemeName
+            {
+                get
+                {
+                    return _themeName;
+                }
+                set
+                {
+                    // 处理下，保证不为空指针或空白字串
+                    _themeName = (value == null ? string.Empty : value.Trim());
+                }
+            }
+
+            // 皮肤路径
             public string ThemeFolder
             {
                 get
                 {
-                    // 处理下，保证不为空指针或空白字串
-                    _themeFolder = (_themeFolder == null ? string.Empty : _themeFolder.Trim());
-
                     // 0长度字串表示没有使用皮肤
-                    if(_themeFolder.Length == 0)
+                    if(_themeName.Length == 0)
                     {
-                        return _themeFolder;
+                        return _themeName;
                     }
                     else
                     {
                         // 连接皮肤目录和根目录
-                        return Path.Combine(this.BaseFolder, _themeFolder);
+                        return this.BaseFolder + THEME_FOLDER + "\\" + _themeName;
                     }
                 }
             }
 
+            // 皮肤配置文件
             public string ThemeConfig
             {
                 get
@@ -132,25 +151,38 @@ namespace ResConverter
                 }
             }
 
-            // 目标项目目录
+            // 目标项目路径
             public string ProjectFolder
             {
                 get
                 {
-                    // 处理下，保证不为空指针或空白字串
-                    _projectName = (_projectName == null ? string.Empty : _projectName.Trim());
-
-                    // 0长度字串表示没有单独设置项目目录
-                    _projectFolder = (_projectFolder == null ? string.Empty : _projectFolder.Trim());
-
                     if (_projectFolder.Length == 0)
                     {
-                        return Path.Combine(this.BaseFolder, "project\\" + _projectName);
+                        return this.BaseFolder + PROJECT_FOLDER + "\\" + _projectName;
                     }
                     else
                     {
-                        return Path.Combine(this.BaseFolder, "project\\" + _projectFolder);
+                        return this.BaseFolder + PROJECT_FOLDER + "\\" + _projectFolder;
                     }
+                }
+                set
+                {
+                    // 0长度字串表示没有单独设置项目目录
+                    _projectFolder = (value == null ? string.Empty : value.Trim());
+                }
+            }
+
+            // 目标项目名称
+            public string ProjectName
+            {
+                get
+                {
+                    return _projectName;
+                }
+                set
+                {
+                    // 处理下，保证不为空指针或空白字串
+                    _projectName = (value == null ? string.Empty : value.Trim());
                 }
             }
 
@@ -215,28 +247,66 @@ namespace ResConverter
                 return true;
             }
 
+            // 根据配置的内容生成报告
             public override string ToString()
             {
                 StringBuilder sb = new StringBuilder();
+                sb.AppendFormat("== 项目配置清单 =="); sb.Append(Environment.NewLine);
 
-                if(string.IsNullOrEmpty(this._themeFolder))
-                {
-                    sb.AppendFormat("皮肤：{0}", NAME_DEFAULT_SKIN);
-                }
-                else
-                {
-                    sb.AppendFormat("皮肤：{0}", this._themeFolder);
-                }
                 sb.Append(Environment.NewLine);
-
+                string theme = this._themeName;
+                if (string.IsNullOrEmpty(theme)) theme = NAME_DEFAULT_THEME;
+                sb.AppendFormat("所选皮肤：{0}", theme); sb.Append(Environment.NewLine);
+                sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height); sb.Append(Environment.NewLine);
+                
+                sb.Append(Environment.NewLine);
                 sb.AppendFormat("项目名称：{0}", this._projectName);sb.Append(Environment.NewLine);
-                sb.AppendFormat("项目文件夹：{0}", this.ProjectFolder);sb.Append(Environment.NewLine);
-                sb.AppendFormat("分辨率：{0}x{1}", this._width, this._height);sb.Append(Environment.NewLine);
-                sb.AppendFormat("===详细信息===");sb.Append(Environment.NewLine);
-                sb.AppendFormat("根目录：{0}", this.BaseFolder);sb.Append(Environment.NewLine);
+                sb.AppendFormat("项目位置：{0}", this.ProjectFolder); sb.Append(Environment.NewLine);
+                
+                sb.Append(Environment.NewLine);
                 sb.AppendFormat("缩放策略：{0}", this._scaler); sb.Append(Environment.NewLine);
                 sb.AppendFormat("缩放质量：{0}", this._quality); sb.Append(Environment.NewLine);
+                sb.AppendFormat("NVLMaker目录：{0}", this.BaseFolder);sb.Append(Environment.NewLine);
                 return sb.ToString();
+            }
+
+            // 读取当前所选皮肤目录中的说明文件
+            public string GetProjectInfo()
+            {
+                string path = this.ThemeFolder;
+                if (string.IsNullOrEmpty(path))
+                {
+                    path = this.BaseFolder + TEMPLATE_FOLDER + DATA_FOLDER;
+                }
+
+                try
+                {
+                    string readmefile = Path.Combine(path, "Readme.txt");
+                    if (File.Exists(readmefile))
+                    {
+                        using (StreamReader r = new StreamReader(readmefile))
+                        {
+                            // 读取readme文件作为显示内容
+                            return r.ReadToEnd();
+                        }
+                    }
+
+                    string configfile = Path.Combine(path, "Config.tjs");
+                    if (File.Exists(readmefile))
+                    {
+                        using (StreamReader r = new StreamReader(configfile))
+                        {
+                            // 读取config文件作为显示内容
+                            return r.ReadToEnd();
+                        }
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    return e.Message;
+                }
+
+                return string.Empty;
             }
         }
 
@@ -301,7 +371,7 @@ namespace ResConverter
             this.SuspendLayout();
 
             // 设定启动时的工作路径为软件根目录
-            _curConfig._baseFolder = Directory.GetCurrentDirectory();
+            _curConfig.BaseFolder = Directory.GetCurrentDirectory();
 
             // 初始化分辨率设置
             cbResolution.Items.Clear();
@@ -336,21 +406,17 @@ namespace ResConverter
         private void test()
         {
             // 资源转换器对象的测试用例
-            ResConverter cov = new ResConverter();
-
             ResConfig config = new ResConfig();
-            ResFile f1 = new ResFile();
-            f1.path = @"c:\a.png";
-            ResFile f2 = new ResFile();
-            f2.path = @"c:\b.png";
-            config.files.Add(f1);
-            config.files.Add(f2);
+            config.files.Add(new ResFile(@"a.png"));
+            config.files.Add(new ResFile(@"b.png"));
             config.name = "TestTest";
-            config.path = @"c:\test.xml";
+            config.path = @"c:\";
 
-            config.Save(config.path);
+            config.Save(@"c:\test.xml");
+            ResConfig newConfig = ResConfig.Load(@"c:\test.xml");
 
-            ResConfig newConfig = ResConfig.Load(config.path);
+            ResConverter cov = new ResConverter();
+            cov.Start(config, @"d:\", 1024, 768, 1920, 1080);
         }
 
         private void btnNext_Click(object sender, EventArgs e)
@@ -371,29 +437,33 @@ namespace ResConverter
         private void btnOK_Click(object sender, EventArgs e)
         {
             // 开始建立项目
-
+            if(MessageBox.Show("开始创建项目？", "确认", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                OnBuild();
+            }
         }
-
+        
         void OnStep1()
         {
-            //
+            // 刷新皮肤目录列表
             int selected = 0;
             lstTemplate.BeginUpdate();
             lstTemplate.Items.Clear();
-            lstTemplate.Items.Add(NAME_DEFAULT_SKIN);
+            lstTemplate.Items.Add(NAME_DEFAULT_THEME);
 
             try
             {
-                string lastSelect = _curConfig._themeFolder.ToLower();
+                string lastSelect = _curConfig.ThemeName.ToLower();
                 string root = _curConfig.BaseFolder;
-                string[] skins = Directory.GetDirectories(root + SKIN_FOLDER);
-                foreach(string skin in skins)
+                string[] themes = Directory.GetDirectories(root + THEME_FOLDER);
+                foreach (string theme in themes)
                 {
                     // 只留目录名
-                    lstTemplate.Items.Add(Path.GetFileName(skin));
+                    string name = Path.GetFileName(theme);
+                    lstTemplate.Items.Add(name);
 
                     // 匹配第一个目录名相同的皮肤作为选中项，返回的时候保持选项正确
-                    if (selected == 0 && lastSelect == skin)
+                    if (selected == 0 && lastSelect == name)
                     {
                         selected = lstTemplate.Items.Count - 1;
                     }
@@ -410,16 +480,35 @@ namespace ResConverter
 
         void OnStep2()
         {
-            // 记录上一步选的皮肤目录
-            if(lstTemplate.SelectedIndex > 0)
+            // 第二步的说明窗口暂时想不到写啥，继续留着这个说明吧
+            txtResolution.Text = txtTemplate.Text;
+
+            // 读取皮肤目录下的文件列表
+            string theme = _curConfig.ThemeFolder;
+            if (string.IsNullOrEmpty(theme))
             {
-                string lastSelect = lstTemplate.SelectedItem as string;
-                _curConfig._themeFolder = lastSelect.Trim();
+                theme = _curConfig.BaseFolder + TEMPLATE_FOLDER + DATA_FOLDER;
             }
-            else
+
+            // 这里本来应该根据缩放策略配置来显示每个文件如何缩放
+            // 先简单列一下文件和目录吧……
+            try
             {
-                _curConfig._themeFolder = string.Empty;
+                lstScale.BeginUpdate();
+                lstScale.Items.Clear();
+                string[] subDirs = Directory.GetDirectories(theme);
+                foreach (string dir in subDirs)
+                {
+                    lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
+                }
+                string[] files = Directory.GetFiles(theme);
+                foreach (string file in files)
+                {
+                    lstScale.Items.Add(Path.GetFileName(file));
+                }
+                lstScale.EndUpdate();
             }
+            catch (System.Exception){}
         }
 
         void OnStep3()
@@ -427,23 +516,181 @@ namespace ResConverter
             // 保存上一步的结果
             _curConfig._width = (int)numWidth.Value;
             _curConfig._height = (int)numHeight.Value;
+            txtProjectName.Focus();
         }
 
         void OnStep4()
         {
             // 保存上一步的结果
-            _curConfig._projectName = txtProjectName.Text;
+            _curConfig.ProjectName = txtProjectName.Text;
             if (checkFolder.Checked)
-                _curConfig._projectFolder = txtFolderName.Text;
+                _curConfig.ProjectFolder = txtFolderName.Text;
 
             // 根据当前配置生成报告
             StringWriter otuput = new StringWriter();
             
             btnOK.Enabled = _curConfig.IsReady(otuput);
-            btnOK.BringToFront();
-            btnOK.Focus();
-
             txtReport.Text = otuput.ToString();
+
+            btnOK.BringToFront();
+            btnOK.Show();
+            btnOK.Focus();
+            btnExit.Hide();
+        }
+
+        void OnBuild()
+        {
+            // 开始建立项目
+            try
+            {
+                // 禁止按钮
+                btnPrev.Enabled = false;
+                btnCancel.Enabled = false;
+                btnOK.Enabled = false;
+                btnExit.Enabled = false;
+
+                ThreadStart func = delegate()
+                {
+                    // 先从模板目录拷贝文件到项目目录
+                    string template = _curConfig.BaseFolder + TEMPLATE_FOLDER;
+                    string project = _curConfig.ProjectFolder;
+                    ConvertFiles(template, project);
+
+                    // 再从皮肤目录拷贝文件到项目资料文件夹
+                    string theme = _curConfig.ThemeFolder;
+                    if (!string.IsNullOrEmpty(theme))
+                    {
+                        ConvertFiles(theme, project + DATA_FOLDER);
+                    }
+
+                    // TODO: 修正所有坐标，写入项目名称
+
+                };
+
+                // 启动一个线程来拷贝文件，防止UI死锁
+                Thread t = new Thread(func);
+                t.Start();
+                while(!t.Join(100))
+                {
+                    Application.DoEvents();
+                }
+                
+                // 建立完成，显示退出按钮
+                btnOK.Hide();
+                btnExit.BringToFront();
+                btnExit.Show();
+                btnExit.Enabled = true;
+
+                txtReport.Text += "项目建立完毕！";
+            }
+            catch (System.Exception e)
+            {
+                // 显示错误原因
+                txtReport.Text += e.Message;
+
+                // 恢复按钮
+                btnCancel.Enabled = true;
+                btnPrev.Enabled = true;
+            }
+        }
+
+        // 工具函数：创建文件夹，并记录其中的文件
+        void CreateDir(string source, string dest, List<string> files)
+        {
+            if (!Directory.Exists(dest))
+            {
+                Directory.CreateDirectory(dest);
+            }
+
+            if (files != null)
+            {
+                string[] curFiles = Directory.GetFiles(source);
+                files.AddRange(curFiles);
+            }
+
+            string[] subDirs = Directory.GetDirectories(source);
+            if (subDirs.Length == 0)
+            {
+                // 木有找到任何子目录
+                return;
+            }
+
+            foreach (string dir in subDirs)
+            {
+                string name = Path.GetFileName(dir);
+                CreateDir(dir, Path.Combine(dest, name), files);
+            }
+        }
+
+        // 工具函数：拷贝并缩放文件
+        void ConvertFiles(string srcPath, string destPath)
+        {
+            string title = this.Text;
+
+            // 源文件列表
+            List<string> srcFiles = new List<string>();
+            try
+            {
+                // 建立目录并获取文件列表
+                CreateDir(srcPath, destPath, srcFiles);
+
+                // 转换图片文件，其他文件直接拷贝
+                ResConfig resource = new ResConfig();
+                resource.path = srcPath;
+                resource.name = NAME_DEFAULT_THEME;
+
+                // TODO: 从配置里读取源图片大小
+                int sw = 1024, sh = 768;
+                int dw = _curConfig._width, dh = _curConfig._height;
+
+                int cutLen = srcPath.Length;
+                foreach (string srcfile in srcFiles)
+                {
+                    // 截掉模板目录以径获取相对路径
+                    string relFile = srcfile.Substring(cutLen + 1);
+
+                    // 取得扩展名
+                    string ext = Path.GetExtension(relFile).ToLower();
+
+                    if ( (sw != dw || sh != dh) && // 宽高如果和源文件相同那就不用转换了
+                         (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") )
+                    {
+                        // 是图片则添加到转换器中
+                        resource.files.Add(new ResFile(relFile));
+                    }
+                    else
+                    {
+                        // 直接拷贝
+                        this.BeginInvoke(new ThreadStart(delegate()
+                        {
+                            this.Text = string.Format("{0}: 拷贝{1}", title, relFile);
+                        }));
+
+                        File.Copy(srcfile, Path.Combine(destPath, relFile), true);
+                    }
+                }
+
+                this.BeginInvoke(new ThreadStart(delegate()
+                {
+                    this.Text = string.Format("{0}: 图片转换中……", title);
+                }));
+
+                if (resource.files.Count > 0)
+                {
+                    ResConverter conv = new ResConverter();
+                    conv.Start(resource, destPath, sw, sh, dw, dh);
+                }
+
+            }
+            catch (System.Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+
+            this.Invoke(new ThreadStart(delegate()
+            {
+                this.Text = title;
+            }));
         }
 
         // 标记是否在操作下拉列表，防止和数字选择控件相互调用
@@ -459,6 +706,7 @@ namespace ResConverter
                 _isSelectingRes = false;
             }
         }
+
         private void numResolution_ValueChanged(object sender, EventArgs e)
         {
             if(!_isSelectingRes && cbResolution.Items.Count > 0)
@@ -478,9 +726,34 @@ namespace ResConverter
 
         private void txtProjectName_TextChanged(object sender, EventArgs e)
         {
-            if(!checkFolder.Checked)
+            if (!checkFolder.Checked)
             {
                 txtFolderName.Text = txtProjectName.Text;
+            }
+        }
+
+        private void lstTemplate_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // 记录选取的皮肤目录
+            if (lstTemplate.SelectedIndex > 0)
+            {
+                string lastSelect = lstTemplate.SelectedItem as string;
+                _curConfig.ThemeName = lastSelect.Trim();
+            }
+            else
+            {
+                _curConfig.ThemeName = string.Empty;
+            }
+
+            txtTemplate.Text = _curConfig.GetProjectInfo();
+        }
+
+        private void Wizard_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if(!btnExit.Enabled)
+            {
+                MessageBox.Show("正在创建项目，请稍候……");
+                e.Cancel = true;
             }
         }
     }
