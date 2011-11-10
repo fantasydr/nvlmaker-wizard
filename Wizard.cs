@@ -16,6 +16,7 @@ namespace ResConverter
         const string TEMPLATE_FOLDER = "\\project\\template";
         const string DATA_FOLDER = "\\data";
         const string PROJECT_FOLDER = "\\project";
+        const string UI_LAYOUT = "macro\\ui*.tjs";
 
         const string NAME_DEFAULT_THEME = "默认皮肤";
         const string NAME_CUSTOM_RESOLUTION = "(自定义)";
@@ -148,6 +149,14 @@ namespace ResConverter
                 get
                 {
                     return Path.Combine(this.ThemeFolder, "Config.tjs");
+                }
+            }
+
+            public string[] UILayouts
+            {
+                get
+                {
+                    return Directory.GetFiles(this.ThemeFolder, UI_LAYOUT);
                 }
             }
 
@@ -405,6 +414,20 @@ namespace ResConverter
 
         private void test()
         {
+            // 测试tjs符号读取
+            string[] layouts = _curConfig.UILayouts;
+            using (StreamReader r = new StreamReader(layouts[0]))
+            {
+                TjsParser parser = new TjsParser();
+
+                TjsParser.Token token = null;
+                do
+                {
+                    token = parser.GetNext(r);
+                    Console.Write(token.val);
+                } while (token != null && token.t != TjsParser.TokenType.Unknow);
+            }
+
             // 资源转换器对象的测试用例
             ResConfig config = new ResConfig();
             config.files.Add(new ResFile(@"a.png"));

@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ResConverter.cs" />
+    <Compile Include="TjsParser.cs" />
     <Compile Include="Wizard.cs">
       <SubType>Form</SubType>
     </Compile>
