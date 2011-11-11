@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.IO;
 using System.Threading;
+using Tjs;
 
 namespace ResConverter
 {
@@ -414,17 +415,32 @@ namespace ResConverter
 
         private void test()
         {
-            // ≤‚ ‘tjs∑˚∫≈∂¡»°
+            //return;
+
             string[] layouts = _curConfig.UILayouts;
+
+            // ≤‚ ‘tjs÷µ∂¡»°
+            foreach (string layout in layouts)
+            {
+                using (StreamReader r = new StreamReader(layout))
+                {
+                    TjsParser parser = new TjsParser();
+                    TjsValue val = null;
+                    do 
+                    {
+                        val = parser.Parse(r);
+                    } while (val != null);
+                }
+            }
+
+            // ≤‚ ‘tjs∑˚∫≈∂¡»°
             using (StreamReader r = new StreamReader(layouts[0]))
             {
                 TjsParser parser = new TjsParser();
-
                 TjsParser.Token token = null;
                 do
                 {
                     token = parser.GetNext(r);
-                    Console.Write(token.val);
                 } while (token != null && token.t != TjsParser.TokenType.Unknow);
             }
 
@@ -532,6 +548,8 @@ namespace ResConverter
                 lstScale.EndUpdate();
             }
             catch (System.Exception){}
+
+            test();
         }
 
         void OnStep3()
