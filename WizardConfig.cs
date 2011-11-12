@@ -112,8 +112,26 @@ namespace Wizard
                 return double.IsNaN(ret) ? 0 : (int)ret;
             }
         }
-        
-        TjsDict _setting = null;
+
+        public int thumbnailwidth
+        {
+            get
+            {
+                // 读取缩略图大小
+                double ret = double.NaN;
+                if (_setting != null)
+                {
+                    TjsString str = _setting.GetValue("savedata/thumbnailwidth") as TjsString;
+                    if (str != null)
+                    {
+                        double.TryParse(str.val, out ret);
+                    }
+                }
+                return double.IsNaN(ret) ? 0 : (int)ret;
+            }
+        }
+
+        public TjsDict _setting = null;
 
         public void LoadSetting(string file)
         {
@@ -671,7 +689,7 @@ namespace Wizard
         }
 
         // 修改config.tjs
-        public static void ModifyConfig(string dataPath, string title, int dh, int dw)
+        public static void ModifyConfig(string dataPath, string title, int sw, int sh, int dh, int dw)
         {
             // 更新config
             string configFile = Path.Combine(dataPath, UI_CONFIG);
@@ -680,6 +698,7 @@ namespace Wizard
                 Regex regTitle = new Regex(@"\s*;\s*System.title\s*=");
                 Regex regW = new Regex(@"\s*;\s*scWidth\s*=");
                 Regex regH = new Regex(@"\s*;\s*scHeight\s*=");
+                Regex regThumb = new Regex(@"\s*;\s*thumbnailWidth\s*=");
 
                 StringBuilder buf = new StringBuilder();
                 using (StreamReader r = new StreamReader(configFile))
@@ -699,6 +718,20 @@ namespace Wizard
                         {
                             buf.AppendLine(string.Format(";scHeight = {0};", dh));
                         }
+                        else if (regThumb.IsMatch(line))
+                        {
+                            // 临时创建一个属性对象用于读取setting
+                            string settingFile = Path.Combine(dataPath, UI_SETTING);
+                            ProjectProperty info = new ProjectProperty();
+                            info.LoadSetting(settingFile);
+
+                            // 修正缩略图
+                            int tw = info.thumbnailwidth;
+                            if (tw > 0)
+                            {
+                                buf.AppendLine(string.Format(";thumbnailWidth = {0};", tw));
+                            }
+                        }
                         else
                         {
                             buf.AppendLine(line);
@@ -714,29 +747,33 @@ namespace Wizard
         }
 
         // 修改setting.tjs
-        public static void ModifySetting(string dataPath, string title, int dh, int dw)
+        public static void ModifySetting(string dataPath, string title, int sw, int sh, int dh, int dw)
         {
             // 更新setting
             string settingFile = Path.Combine(dataPath, UI_SETTING);
-            if (File.Exists(settingFile))
-            {
-                TjsParser parser = new TjsParser();
+            
+            // 临时创建一个属性对象用于读取setting
+            ProjectProperty info = new ProjectProperty();
+            info.LoadSetting(settingFile);
+            TjsDict setting = info._setting;
 
-                TjsDict setting = null;
-                using (StreamReader r = new StreamReader(settingFile))
+            if (setting != null)
+            {
+                setting.SetString("title", title);
+                setting.SetNumber("width", dw);
+                setting.SetNumber("height", dh);
+
+                // 修正缩略图宽度
+                int tw = info.thumbnailwidth;
+                if (tw > 0)
                 {
-                    setting = parser.Parse(r) as TjsDict;
+                    tw = tw * dw / sw;
+                    setting.SetValue("savedata/thumbnailwidth", new TjsString(tw.ToString()));
                 }
 
-                if (setting != null)
+                using (StreamWriter w = new StreamWriter(settingFile, false, Encoding.Unicode))
                 {
-                    setting.SetString("title", title);
-                    setting.SetNumber("width", dw);
-                    setting.SetNumber("height", dh);
-                    using (StreamWriter w = new StreamWriter(settingFile, false, Encoding.Unicode))
-                    {
-                        w.Write(setting.ToString());
-                    }
+                    w.Write(setting.ToString());
                 }
             }
         }

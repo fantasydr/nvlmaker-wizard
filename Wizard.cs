@@ -485,7 +485,7 @@ namespace Wizard
 
             try
             {
-                WizardConfig.ModifySetting(dataPath, title, dh, dw);
+                WizardConfig.ModifySetting(dataPath, title, sw, sh, dh, dw);
             }
             catch (System.Exception e)
             {
@@ -494,7 +494,7 @@ namespace Wizard
 
             try
             {
-                WizardConfig.ModifyConfig(dataPath, title, dh, dw);
+                WizardConfig.ModifyConfig(dataPath, title, sw, sh, dh, dw);
             }
             catch (System.Exception e)
             {

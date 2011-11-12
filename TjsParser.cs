@@ -170,6 +170,61 @@ namespace Tjs
             return v;
         }
 
+        public TjsValue GetValue(string namepath)
+        {
+            int split = namepath.IndexOf("/");
+            if (split < 0)
+            {
+                // 读取具体值
+                TjsValue v = null;
+                this.val.TryGetValue(namepath, out v);
+                return v;
+            }
+            else
+            {
+                string name = namepath.Substring(0, split);
+
+                TjsValue v = null;
+                if (this.val.TryGetValue(name, out v))
+                {
+                    TjsDict next = v as TjsDict;
+                    if (next != null)
+                    {
+                        return next.GetValue(namepath.Substring(split + 1));
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public TjsDict SetValue(string namepath, TjsValue value)
+        {
+            int split = namepath.IndexOf("/");
+            if(split < 0)
+            {
+                // 返回最底层的dict
+                this.val[namepath] = value;
+                return this;
+            }
+            else
+            {
+                string name = namepath.Substring(0, split);
+
+                TjsValue v = null;
+                if (this.val.TryGetValue(name, out v))
+                {
+                    TjsDict next = v as TjsDict;
+                    if (next != null)
+                    {
+                        return next.SetValue(namepath.Substring(split+1), value);
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public override string ToString()
         {
             StringBuilder buf = new StringBuilder();

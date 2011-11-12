@@ -308,7 +308,7 @@ namespace Wizard
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(392, 271);
+            this.ClientSize = new System.Drawing.Size(394, 274);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.btnPrev);
             this.Controls.Add(this.btnNext);
@@ -320,6 +320,10 @@ namespace Wizard
             this.Controls.Add(this.gbStep1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.MaximizeBox = false;
+            this.MaximumSize = new System.Drawing.Size(400, 300);
+            this.MinimizeBox = false;
+            this.MinimumSize = new System.Drawing.Size(400, 300);
             this.Name = "Wizard";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "项目新建向导";
