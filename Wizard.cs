@@ -149,7 +149,7 @@ namespace ResConverter
         }
 
         // 项目向导配置对象
-        class ProjectConfig
+        class WizardConfig
         {
             #region 数据成员
             private string _baseFolder = string.Empty; // nvlmaker根目录
@@ -558,7 +558,7 @@ namespace ResConverter
         }
 
         // 正在操作的配置
-        ProjectConfig _curConfig = new ProjectConfig();
+        WizardConfig _curConfig = new WizardConfig();
 
         // 记录目前的步骤
         int _curStep = -1;
@@ -842,40 +842,8 @@ namespace ResConverter
                 btnOK.Enabled = false;
                 btnExit.Enabled = false;
 
-                ThreadStart func = delegate()
-                {
-                    // 从配置中读取需要的源大小和目标大小
-                    int dw = _curConfig._width, dh = _curConfig._height;
-
-                    // 先从基础模板目录拷贝文件到项目目录
-                    string template = _curConfig.BaseTemplateFolder;
-                    string project = _curConfig.ProjectFolder;
-
-                    // 读取基础模板的配置
-                    ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
-                    int sw = baseInfo.width, sh = baseInfo.height;
-                    ConvertFiles( template, sw, sh, project, dw, dh );
-
-                    // 修正所有坐标，写入项目名称
-                    AdjustSettings(sw, sh);
-
-                    // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
-                    if (_curConfig.ThemeFolder != template)
-                    {
-                        // 读取所选主题配置
-                        ProjectProperty themeInfo = _curConfig.ReadThemeInfo();
-                        sw = themeInfo.width; sh = themeInfo.height;
-
-                        // 主题的文件直接拷入数据目录
-                        ConvertFiles(_curConfig.ThemeFolder, sw, sh, _curConfig.ProjectDataFolder, dw, dh);
-
-                        // 修正所有坐标，写入项目名称
-                        AdjustSettings(sw, sh);
-                    }
-                };
-
                 // 启动一个线程来拷贝文件，防止UI死锁
-                Thread t = new Thread(func);
+                Thread t = new Thread(new ThreadStart(BuildProject));
                 t.Start();
                 while(!t.Join(100))
                 {
@@ -898,6 +866,40 @@ namespace ResConverter
                 // 恢复按钮
                 btnCancel.Enabled = true;
                 btnPrev.Enabled = true;
+            }
+        }
+
+        #region 工程创建过程
+        // 根据配置创建目标项目
+        private void BuildProject()
+        {
+            // 从配置中读取需要的源大小和目标大小
+            int dw = _curConfig._width, dh = _curConfig._height;
+
+            // 先从基础模板目录拷贝文件到项目目录
+            string template = _curConfig.BaseTemplateFolder;
+            string project = _curConfig.ProjectFolder;
+
+            // 读取基础模板的配置
+            ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
+            int sw = baseInfo.width, sh = baseInfo.height;
+            ConvertFiles(template, sw, sh, project, dw, dh);
+
+            // 修正所有坐标，写入项目名称
+            AdjustSettings(sw, sh);
+
+            // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
+            if (_curConfig.ThemeFolder != template)
+            {
+                // 读取所选主题配置
+                ProjectProperty themeInfo = _curConfig.ReadThemeInfo();
+                sw = themeInfo.width; sh = themeInfo.height;
+
+                // 主题的文件直接拷入数据目录
+                ConvertFiles(_curConfig.ThemeFolder, sw, sh, _curConfig.ProjectDataFolder, dw, dh);
+
+                // 修正所有坐标，写入项目名称
+                AdjustSettings(sw, sh);
             }
         }
 
@@ -932,6 +934,7 @@ namespace ResConverter
         // 工具函数：拷贝并缩放文件
         void ConvertFiles(string srcPath, int sw, int sh, string destPath, int dw, int dh)
         {
+            // 保存窗口标题
             string title = this.Text;
 
             // 源文件列表
@@ -990,6 +993,7 @@ namespace ResConverter
                 Console.WriteLine(e.Message);
             }
 
+            // 恢复窗口标题
             this.Invoke(new ThreadStart(delegate()
             {
                 this.Text = title;
@@ -1004,16 +1008,47 @@ namespace ResConverter
             int dw = _curConfig._width;
             string title = _curConfig.ProjectName;
 
-            ProjectConfig.ModifySetting(dataPath, title, dh, dw);
+            try
+            {
+                WizardConfig.ModifySetting(dataPath, title, dh, dw);
+            }
+            catch (System.Exception e)
+            {
+                this.BeginInvoke(new ThreadStart(delegate()
+                {
+                    this.txtReport.Text += "修改setting.tjs失败！" + Environment.NewLine;
+                }));
+            }
 
-            ProjectConfig.ModifyConfig(dataPath, title, dh, dw);
-
-            // 检查是否需要
+            try
+            {
+                WizardConfig.ModifyConfig(dataPath, title, dh, dw);
+            }
+            catch (System.Exception e)
+            {
+                this.BeginInvoke(new ThreadStart(delegate()
+                {
+                    this.txtReport.Text += "修改Config.tjs失败！" + Environment.NewLine;
+                }));
+            }
+            
+            // 检查是否需要转换
             if (sw != dw || sh != dh)
             {
-                ProjectConfig.ModifyLayout(dataPath, sw, sh, dh, dw);
+                try
+                {
+                    WizardConfig.ModifyLayout(dataPath, sw, sh, dh, dw);
+                }
+                catch (System.Exception e)
+                {
+                    this.BeginInvoke(new ThreadStart(delegate()
+                    {
+                        this.txtReport.Text += "修改界面布局文件失败！" + Environment.NewLine;
+                    }));
+                }
             }
         }
+        #endregion
 
         // 读了主题目录中所有的目录和根目录下的问卷
         private void LoadThemeFiles()
