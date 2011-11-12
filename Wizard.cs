@@ -440,7 +440,11 @@ namespace ResConverter
                     // 取得扩展名
                     string ext = Path.GetExtension(relFile).ToLower();
 
-                    if ( (sw != dw || sh != dh) && // 宽高如果和源文件相同那就不用转换了
+                    if ( // 宽高如果和源文件相同那就不用转换了
+                         (sw != dw || sh != dh) &&
+                         // 忽略某些图片
+                         !WizardConfig.IgnorePicture(relFile) &&
+                         // 只转换这些扩展名对应的文件
                          (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") )
                     {
                         // 是图片则添加到转换器中

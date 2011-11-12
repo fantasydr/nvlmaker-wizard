@@ -5,6 +5,7 @@ using Tjs;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
+using System.Drawing;
 
 namespace ResConverter
 {
@@ -130,6 +131,123 @@ namespace ResConverter
         }
     }
 
+    class ConvertHelper
+    {
+        public static double ScaleInteger(TjsDict dict, string name, double scale)
+        {
+            double num = dict.GetNumber(name);
+            if (!double.IsNaN(num))
+            {
+                num = num * scale;
+                dict.SetNumber(name, Math.Floor(num));
+            }
+
+            return num;
+        }
+
+        public static TjsArray ScalePosArray(TjsDict dict, string name, double scaleX, double scaleY)
+        {
+            TjsValue v = null;
+            if (dict.val.TryGetValue(name, out v))
+            {
+                // 检查是不是数组
+                TjsArray arr = v as TjsArray;
+                if (arr != null)
+                {
+                    // 从中读取两个元素的坐标数组
+                    List<TjsValue> arraynew = new List<TjsValue>();
+                    foreach (TjsValue pos in arr.val)
+                    {
+                        Point p = Point.Empty;
+                        if (TryGetPos(pos, out p))
+                        {
+                            // 按比例缩放
+                            TjsArray posnew = CreatePos((int)(p.X * scaleX), (int)(p.Y * scaleY));
+                            arraynew.Add(posnew);
+                        }
+                        else
+                        {
+                            Debug.Assert(false, "invalid struct in pos array");
+                        }
+                    }
+
+                    dict.val[name] = new TjsArray(arraynew);
+                    return arr;
+                }
+            }
+
+            return null;
+        }
+
+        public static TjsArray ScaleButton(TjsDict dict, string name, double scaleX, double scaleY)
+        {
+            TjsValue v = null;
+            if (dict.val.TryGetValue(name, out v))
+            {
+                // 按钮上多记录了一个是否显示: x, y, shown
+                TjsArray xys = v as TjsArray;
+                if (xys != null && xys.val.Count == 3)
+                {
+                    TjsNumber x = xys.val[0] as TjsNumber;
+                    TjsNumber y = xys.val[1] as TjsNumber;
+                    TjsNumber s = xys.val[2] as TjsNumber;
+
+                    if (x != null && y != null && s != null)
+                    {
+                        TjsArray xysnew = CreatePos((int)(x.val * scaleX), (int)(y.val * scaleY));
+                        xysnew.val.Add(new TjsNumber(s.val));
+                        dict.val[name] = xysnew;
+                        return xysnew;
+                    }
+                    else
+                    {
+                        Debug.Assert(false, "invalid element in button struct");
+                    }
+                }
+                else
+                {
+                    Debug.Assert(false, "invalid button struct");
+                }
+            }
+
+            return null;
+        }
+
+        public static TjsArray CreatePos(int x, int y)
+        {
+            List<TjsValue> inner = new List<TjsValue>();
+            inner.Add(new TjsNumber(x));
+            inner.Add(new TjsNumber(y));
+            return new TjsArray(inner);
+        }
+
+        public static bool TryGetPos(TjsValue pos, out Point p)
+        {
+            TjsArray xy = pos as TjsArray;
+            if (xy != null && xy.val.Count == 2)
+            {
+                TjsNumber x = xy.val[0] as TjsNumber;
+                TjsNumber y = xy.val[1] as TjsNumber;
+                if (x != null && y != null)
+                {
+                    p = new Point((int)x.val, (int)y.val);
+                    return true;
+                }
+                else
+                {
+                    Debug.Assert(false, "invalid element in pos struct");
+                }
+            }
+            else
+            {
+                Debug.Assert(false, "invalid pos struct");
+            }
+
+            p = Point.Empty;
+            return false;
+        }
+
+    }
     // 项目向导配置对象
     class WizardConfig
     {
@@ -147,6 +265,15 @@ namespace ResConverter
         public const int DEFAULT_HEIGHT = 768;
 
         public const string NAME_DEFAULT_THEME = "默认主题";
+
+        // 忽略指定的图片文件
+        const string PIC_IGNORE1 = @"data\system";
+        const string PIC_IGNORE2 = @"system";
+        public static bool IgnorePicture(string relFile)
+        {
+            string file = relFile.ToLower();
+            return file.StartsWith(PIC_IGNORE1) || file.StartsWith(PIC_IGNORE2);
+        }
 
         #region 数据成员
         private string _baseFolder = string.Empty; // nvlmaker根目录
@@ -469,73 +596,19 @@ namespace ResConverter
             return info;
         }
 
-        #region 工具函数
+        // 修改字典文件
         public static void ModifyDict(TjsDict dict, int sw, int sh, int dw, int dh)
         {
-            double num = dict.GetNumber("left");
-            if(!double.IsNaN(num))
-            {
-                num = num * dw / sw;
-                dict.SetNumber("left", Math.Floor(num));
-            }
+            double scaleX = (double)dw / sw;
+            double scaleY = (double)dh / sh;
 
-            num = dict.GetNumber("top");
-            if (!double.IsNaN(num))
-            {
-                num = num * dh / sh;
-                dict.SetNumber("top", Math.Floor(num));
-            }
-
-            num = dict.GetNumber("x");
-            if (!double.IsNaN(num))
-            {
-                num = num * dw / sw;
-                dict.SetNumber("x", Math.Floor(num));
-            }
-
-            num = dict.GetNumber("y");
-            if (!double.IsNaN(num))
-            {
-                num = num * dh / sh;
-                dict.SetNumber("y", Math.Floor(num));
-            }
+            ConvertHelper.ScaleInteger(dict, "left", scaleX);
+            ConvertHelper.ScaleInteger(dict, "x", scaleX);
+            ConvertHelper.ScaleInteger(dict, "top", scaleY);
+            ConvertHelper.ScaleInteger(dict, "y", scaleY);
 
             // 修改locate数组
-            TjsValue v = null;
-            if (dict.val.TryGetValue("locate", out v))
-            {
-                TjsArray locate = v as TjsArray;
-                if(locate != null)
-                {
-                    List<TjsValue> locatenew = new List<TjsValue>();
-                    foreach (TjsValue pos in locate.val)
-                    {
-                        TjsArray xy = pos as TjsArray;
-                        if(xy != null && xy.val.Count == 2)
-                        {
-                            TjsNumber x = xy.val[0] as TjsNumber;
-                            TjsNumber y = xy.val[1] as TjsNumber;
-                            if(x != null && y != null)
-                            {
-                                List<TjsValue> posnew = new List<TjsValue>();
-                                posnew.Add(new TjsNumber(Math.Floor(x.val * dw / sw)));
-                                posnew.Add(new TjsNumber(Math.Floor(y.val * dh / sh)));
-                                locatenew.Add(new TjsArray(posnew));
-                            }
-                            else
-                            {
-                                Debug.Assert(false, "invalid pos element");
-                            }
-                        }
-                        else
-                        {
-                            Debug.Assert(false, "invalid pos array");
-                        }
-                    }
-
-                    dict.val["locate"] = new TjsArray(locatenew);
-                }
-            }
+            ConvertHelper.ScalePosArray(dict, "locate", scaleX, scaleY);
 
             foreach (KeyValuePair<string, TjsValue> kv in dict.val)
             {
@@ -547,6 +620,7 @@ namespace ResConverter
             }
         }
 
+        // 修改UI布局文件
         public static void ModifyLayout(string dataPath, int sw, int sh, int dh, int dw)
         {
             // 更新layout
@@ -563,6 +637,16 @@ namespace ResConverter
                 if (setting != null)
                 {
                     ModifyDict(setting, sw, sh, dw, dh);
+
+                    // 对这个文件里的按钮作特殊处理
+                    if(layout.ToLower().EndsWith("uislpos.tjs"))
+                    {
+                        double scaleX = (double)dw / sw;
+                        double scaleY = (double)dh / sh;
+                        ConvertHelper.ScaleButton(setting, "back", scaleX, scaleY);
+                        ConvertHelper.ScaleButton(setting, "up", scaleX, scaleY);
+                        ConvertHelper.ScaleButton(setting, "down", scaleX, scaleY);
+                    }
                 }
 
                 using (StreamWriter w = new StreamWriter(layout, false, Encoding.Unicode))
@@ -572,6 +656,7 @@ namespace ResConverter
             }
         }
 
+        // 修改config.tjs
         public static void ModifyConfig(string dataPath, string title, int dh, int dw)
         {
             // 更新config
@@ -614,6 +699,7 @@ namespace ResConverter
             }
         }
 
+        // 修改setting.tjs
         public static void ModifySetting(string dataPath, string title, int dh, int dw)
         {
             // 更新setting
@@ -640,6 +726,5 @@ namespace ResConverter
                 }
             }
         }
-        #endregion
     }
 }
