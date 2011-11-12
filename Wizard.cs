@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using System.IO;
 using System.Threading;
 using Tjs;
+using System.Text.RegularExpressions;
 
 namespace ResConverter
 {
@@ -17,9 +18,12 @@ namespace ResConverter
         const string TEMPLATE_FOLDER = "\\project\\template";
         const string DATA_FOLDER = "\\data";
         const string PROJECT_FOLDER = "\\project";
-        const string UI_LAYOUT = "macro\\ui*.tjs";
 
-        const string NAME_DEFAULT_THEME = "默认皮肤";
+        const string UI_LAYOUT = "macro\\ui*.tjs";
+        const string UI_SETTING = "macro\\setting.tjs";
+        const string UI_CONFIG = "Config.tjs";
+
+        const string NAME_DEFAULT_THEME = "默认主题";
         const string NAME_CUSTOM_RESOLUTION = "(自定义)";
 
         // 分辨率设置对象
@@ -79,12 +83,77 @@ namespace ResConverter
             }
         }
 
+        // 模板的基本属性
+        class ProjectProperty
+        {
+            public string readme = string.Empty;
+
+            public string title
+            {
+                get
+                {
+                    // 读取标题
+                    string ret = null;
+                    if (_setting != null)
+                    {
+                        ret = _setting.GetString("title");
+                    }
+                    return ret == null ? string.Empty : ret;
+                }
+            }
+            
+            public int width
+            {
+                get
+                {
+                    // 读取预设宽度
+                    double ret = double.NaN;
+                    if (_setting != null)
+                    {
+                        ret = _setting.GetNumber("width");
+                    }
+                    return double.IsNaN(ret) ? 0 : (int)ret;
+                }
+            }
+
+            public int height
+            {
+                get
+                {
+                    // 读取预设高度
+                    double ret = double.NaN;
+                    if (_setting != null)
+                    {
+                        ret = _setting.GetNumber("height");
+                    }
+                    return double.IsNaN(ret) ? 0 : (int)ret;
+                }
+            }
+            
+            TjsDict _setting = null;
+
+            public void LoadSetting(string file)
+            {
+                _setting = null;
+
+                if (File.Exists(file))
+                {
+                    using (StreamReader r = new StreamReader(file))
+                    {
+                        TjsParser parser = new TjsParser();
+                        TjsDict setting = parser.Parse(r) as TjsDict;
+                        _setting = setting;
+                    }
+                }
+            }
+        }
+
         // 项目向导配置对象
         class ProjectConfig
         {
             #region 数据成员
             private string _baseFolder = string.Empty; // nvlmaker根目录
-            private string _themeName = string.Empty; // 皮肤目录名
+            private string _themeName = string.Empty; // 主题目录名
 
             public int _height; // 分辨率-高度
             public int _width;  // 分辨率-宽度
@@ -95,6 +164,9 @@ namespace ResConverter
             // 目前缩放就按默认做
             private string _scaler = ResFile.SCALER_DEFAULT; // 缩放策略，目前只有这种:(
             private string _quality = ResFile.QUALITY_DEFAULT;   // 缩放质量，默认是高
+
+            // 储存上次读取的主体属性，避免多次读取
+            private ProjectProperty _themeInfo = null;
             #endregion
 
             // nvlmaker根路径
@@ -112,7 +184,16 @@ namespace ResConverter
                 }
             }
 
-            // 皮肤名称
+            // 基础模板路径
+            public string BaseTemplateFolder
+            {
+                get
+                {
+                    return this.BaseFolder + TEMPLATE_FOLDER;
+                }
+            }
+
+            // 主题名称
             public string ThemeName
             {
                 get
@@ -122,42 +203,58 @@ namespace ResConverter
                 set
                 {
                     // 处理下，保证不为空指针或空白字串
-                    _themeName = (value == null ? string.Empty : value.Trim());
+                    string themeName = (value == null ? string.Empty : value.Trim());
+
+                    // 如果主题更换则清空预读的设置
+                    if(themeName != _themeName)
+                    {
+                        this._themeName = themeName;
+                        this._themeInfo = null;
+                    }
                 }
             }
 
-            // 皮肤路径
+            // 主题路径
             public string ThemeFolder
             {
                 get
                 {
-                    // 0长度字串表示没有使用皮肤
+                    // 0长度字串表示没有使用主题
                     if(_themeName.Length == 0)
                     {
-                        return _themeName;
+                        return this.BaseTemplateFolder;
                     }
                     else
                     {
-                        // 连接皮肤目录和根目录
+                        // 连接主题目录和根目录
                         return this.BaseFolder + THEME_FOLDER + "\\" + _themeName;
                     }
                 }
             }
 
-            // 皮肤配置文件
-            public string ThemeConfig
+            // 主题配置文件
+            public string ThemeSetting
             {
                 get
                 {
-                    return Path.Combine(this.ThemeFolder, "Config.tjs");
+                    return Path.Combine(this.ThemeDataFolder, UI_SETTING);
                 }
             }
 
-            public string[] UILayouts
+            // 主题的数据目录
+            public string ThemeDataFolder
             {
                 get
                 {
-                    return Directory.GetFiles(this.ThemeFolder, UI_LAYOUT);
+                    // 0长度字串表示没有使用主题
+                    if (_themeName.Length == 0)
+                    {
+                        return this.ThemeFolder + DATA_FOLDER; 
+                    }
+                    else
+                    {
+                        return this.ThemeFolder;
+                    }
                 }
             }
 
@@ -179,6 +276,15 @@ namespace ResConverter
                 {
                     // 0长度字串表示没有单独设置项目目录
                     _projectFolder = (value == null ? string.Empty : value.Trim());
+                }
+            }
+
+            // 目标项目数据路径
+            public string ProjectDataFolder
+            {
+                get
+                {
+                    return this.ProjectFolder + DATA_FOLDER;
                 }
             }
 
@@ -231,14 +337,14 @@ namespace ResConverter
                     {
                         if (!Directory.Exists(path))
                         {
-                            if (output != null) output.WriteLine("错误：皮肤目录不存在。");
+                            if (output != null) output.WriteLine("错误：主题目录不存在。");
                             return false;
                         }
 
-                        path = this.ThemeConfig;
+                        path = this.ThemeSetting;
                         if (string.IsNullOrEmpty(path) || !File.Exists(path))
                         {
-                            if (output != null) output.WriteLine("警告：皮肤缺少配置文件");
+                            if (output != null) output.WriteLine("警告：主题缺少配置文件");
                         }
                     }
 
@@ -266,7 +372,7 @@ namespace ResConverter
                 sb.Append(Environment.NewLine);
                 string theme = this._themeName;
                 if (string.IsNullOrEmpty(theme)) theme = NAME_DEFAULT_THEME;
-                sb.AppendFormat("所选皮肤：{0}", theme); sb.Append(Environment.NewLine);
+                sb.AppendFormat("所选主题：{0}", theme); sb.Append(Environment.NewLine);
                 sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height); sb.Append(Environment.NewLine);
                 
                 sb.Append(Environment.NewLine);
@@ -280,44 +386,175 @@ namespace ResConverter
                 return sb.ToString();
             }
 
-            // 读取当前所选皮肤目录中的说明文件
-            public string GetProjectInfo()
+            // 读取所选主题的属性
+            public ProjectProperty ReadThemeInfo()
             {
-                string path = this.ThemeFolder;
-                if (string.IsNullOrEmpty(path))
+                // 直接返回读取值
+                if (this._themeInfo != null)
                 {
-                    path = this.BaseFolder + TEMPLATE_FOLDER + DATA_FOLDER;
+                    return this._themeInfo;
                 }
 
+                ProjectProperty info = new ProjectProperty();
+                this._themeInfo = info;
+
+                // 读取readme文件作为显示内容
                 try
                 {
-                    string readmefile = Path.Combine(path, "Readme.txt");
+                    string readmefile = Path.Combine(this.ThemeDataFolder, "Readme.txt");
                     if (File.Exists(readmefile))
                     {
                         using (StreamReader r = new StreamReader(readmefile))
                         {
-                            // 读取readme文件作为显示内容
-                            return r.ReadToEnd();
-                        }
-                    }
-
-                    string configfile = Path.Combine(path, "Config.tjs");
-                    if (File.Exists(readmefile))
-                    {
-                        using (StreamReader r = new StreamReader(configfile))
-                        {
-                            // 读取config文件作为显示内容
-                            return r.ReadToEnd();
+                            info.readme = r.ReadToEnd();
                         }
                     }
                 }
                 catch (System.Exception e)
                 {
-                    return e.Message;
+                    // 出错的不保留
+                    this._themeInfo = null;
+                    info.readme = e.Message;
                 }
 
-                return string.Empty;
+                // 读取设置文件
+                try
+                {
+                    info.LoadSetting(this.ThemeSetting);
+                }
+                catch (System.Exception e)
+                {
+                    // 出错的不保留
+                    this._themeInfo = null;
+                    info.readme = e.Message;
+                }
+                
+                return info;
             }
+
+            // 读取基础模板的配置
+            public ProjectProperty ReadBaseTemplateInfo()
+            {
+                // 如果选的是默认的主题，则返回主题属性
+                if(this.BaseTemplateFolder == this.ThemeFolder)
+                {
+                    return this.ReadThemeInfo();
+                }
+
+                // 这里就不读readme了，也不做保存，每次调用都从文件读一次
+                string file = Path.Combine(this.BaseTemplateFolder + DATA_FOLDER, UI_SETTING);
+                ProjectProperty info = new ProjectProperty();
+                try
+                {
+                    info.LoadSetting(file);
+                }
+                catch (System.Exception e)
+                {
+                    info.readme = e.Message;
+                }
+                return info;
+            }
+
+            #region 工具函数
+            public static void ModifyDict(TjsDict dict, int sw, int sh, int dw, int dh)
+            {
+
+            }
+
+            public static void ModifyLayout(string dataPath, int sw, int sh, int dh, int dw)
+            {
+                // 更新layout
+                string[] layouts = Directory.GetFiles(dataPath, UI_LAYOUT);
+                foreach (string layout in layouts)
+                {
+                    TjsParser parser = new TjsParser();
+                    TjsDict setting = null;
+                    using (StreamReader r = new StreamReader(layout))
+                    {
+                        setting = parser.Parse(r) as TjsDict;
+                    }
+
+                    if (setting != null)
+                    {
+                        ModifyDict(setting, sw, sh, dw, dh);
+                    }
+
+                    using (StreamWriter w = new StreamWriter(layout, false, Encoding.Unicode))
+                    {
+                        w.Write(setting.ToString());
+                    }
+                }
+            }
+
+            public static void ModifyConfig(string dataPath, string title, int dh, int dw)
+            {
+                // 更新config
+                string configFile = Path.Combine(dataPath, UI_CONFIG);
+                if (File.Exists(configFile))
+                {
+                    Regex regTitle = new Regex(@"\s*;\s*System.title\s*=");
+                    Regex regW = new Regex(@"\s*;\s*scWidth\s*=");
+                    Regex regH = new Regex(@"\s*;\s*scHeight\s*=");
+
+                    StringBuilder buf = new StringBuilder();
+                    using (StreamReader r = new StreamReader(configFile))
+                    {
+                        while (!r.EndOfStream)
+                        {
+                            string line = r.ReadLine();
+                            if (regTitle.IsMatch(line))
+                            {
+                                buf.AppendLine(string.Format(";System.title = \"{0}\";", title));
+                            }
+                            else if (regW.IsMatch(line))
+                            {
+                                buf.AppendLine(string.Format(";scWidth = {0};", dw));
+                            }
+                            else if (regH.IsMatch(line))
+                            {
+                                buf.AppendLine(string.Format(";scHeight = {0};", dh));
+                            }
+                            else
+                            {
+                                buf.AppendLine(line);
+                            }
+                        }
+                    }
+
+                    using (StreamWriter w = new StreamWriter(configFile, false, Encoding.Unicode))
+                    {
+                        w.Write(buf.ToString());
+                    }
+                }
+            }
+
+            public static void ModifySetting(string dataPath, string title, int dh, int dw)
+            {
+                // 更新setting
+                string settingFile = Path.Combine(dataPath, UI_SETTING);
+                if (File.Exists(settingFile))
+                {
+                    TjsParser parser = new TjsParser();
+
+                    TjsDict setting = null;
+                    using (StreamReader r = new StreamReader(settingFile))
+                    {
+                        setting = parser.Parse(r) as TjsDict;
+                    }
+
+                    if (setting != null)
+                    {
+                        setting.SetString("title", title);
+                        setting.SetNumber("width", dw);
+                        setting.SetNumber("height", dh);
+                        using (StreamWriter w = new StreamWriter(settingFile, false, Encoding.Unicode))
+                        {
+                            w.Write(setting.ToString());
+                        }
+                    }
+                }
+            }
+            #endregion
         }
 
         // 正在操作的配置
@@ -415,9 +652,22 @@ namespace ResConverter
 
         private void test()
         {
-            //return;
+            return;
 
-            string[] layouts = _curConfig.UILayouts;
+            string strTitle = ";System.title =\"模板工程\";";
+            string strW = ";scWidth =1024;";
+            string strH = ";scHeight =768;";
+
+            Regex regTitle = new Regex(@"\s*;\s*System.title\s*=");
+            Regex regW = new Regex(@"\s*;\s*scWidth\s*=");
+            Regex regH = new Regex(@"\s*;\s*scHeight\s*=");
+
+            bool ret = false;
+            ret = regTitle.IsMatch(strTitle);
+            ret = regW.IsMatch(strW);
+            ret = regH.IsMatch(strH);
+
+            string[] layouts = Directory.GetFiles(_curConfig.ThemeDataFolder, UI_LAYOUT);
 
             // 测试tjs值读取
             foreach (string layout in layouts)
@@ -484,7 +734,7 @@ namespace ResConverter
         
         void OnStep1()
         {
-            // 刷新皮肤目录列表
+            // 刷新主题目录列表
             int selected = 0;
             lstTemplate.BeginUpdate();
             lstTemplate.Items.Clear();
@@ -501,7 +751,7 @@ namespace ResConverter
                     string name = Path.GetFileName(theme);
                     lstTemplate.Items.Add(name);
 
-                    // 匹配第一个目录名相同的皮肤作为选中项，返回的时候保持选项正确
+                    // 匹配第一个目录名相同的主题作为选中项，返回的时候保持选项正确
                     if (selected == 0 && lastSelect == name)
                     {
                         selected = lstTemplate.Items.Count - 1;
@@ -519,36 +769,38 @@ namespace ResConverter
 
         void OnStep2()
         {
-            // 第二步的说明窗口暂时想不到写啥，继续留着这个说明吧
-            txtResolution.Text = txtTemplate.Text;
+            ProjectProperty info = _curConfig.ReadThemeInfo();
 
-            // 读取皮肤目录下的文件列表
-            string theme = _curConfig.ThemeFolder;
-            if (string.IsNullOrEmpty(theme))
+            txtResolution.Text = "图片原始分辨率如下：";
+
+            // 第二步的说明窗口，目前也只有这么一个属性可以显示
+            txtResolution.Text += string.Format("{0}{0}=== 所选主题 ==={0}分辨率: {1}x{2}",
+                                               Environment.NewLine, info.width, info.height);
+
+            ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
+            if(baseInfo != info)
             {
-                theme = _curConfig.BaseFolder + TEMPLATE_FOLDER + DATA_FOLDER;
+                txtResolution.Text += string.Format("{0}{0}=== 默认主题 ==={0}分辨率: {1}x{2}",
+                                                    Environment.NewLine, baseInfo.width, baseInfo.height);
             }
+
+            // 选定分辨率
+            int w = info.width, h = info.height;
+            for(int i=0;i<cbResolution.Items.Count;i++)
+            {
+                Resolution r = cbResolution.Items[i] as Resolution;
+                if (r != null && r._w == w && r._h == h )
+                {
+                    cbResolution.SelectedIndex = i;
+                    break;
+                }
+            }            
 
             // 这里本来应该根据缩放策略配置来显示每个文件如何缩放
             // 先简单列一下文件和目录吧……
-            try
-            {
-                lstScale.BeginUpdate();
-                lstScale.Items.Clear();
-                string[] subDirs = Directory.GetDirectories(theme);
-                foreach (string dir in subDirs)
-                {
-                    lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
-                }
-                string[] files = Directory.GetFiles(theme);
-                foreach (string file in files)
-                {
-                    lstScale.Items.Add(Path.GetFileName(file));
-                }
-                lstScale.EndUpdate();
-            }
-            catch (System.Exception){}
+            LoadThemeFiles();
 
+            // 调用下测试用的函数
             test();
         }
 
@@ -592,20 +844,34 @@ namespace ResConverter
 
                 ThreadStart func = delegate()
                 {
-                    // 先从模板目录拷贝文件到项目目录
-                    string template = _curConfig.BaseFolder + TEMPLATE_FOLDER;
+                    // 从配置中读取需要的源大小和目标大小
+                    int dw = _curConfig._width, dh = _curConfig._height;
+
+                    // 先从基础模板目录拷贝文件到项目目录
+                    string template = _curConfig.BaseTemplateFolder;
                     string project = _curConfig.ProjectFolder;
-                    ConvertFiles(template, project);
 
-                    // 再从皮肤目录拷贝文件到项目资料文件夹
-                    string theme = _curConfig.ThemeFolder;
-                    if (!string.IsNullOrEmpty(theme))
+                    // 读取基础模板的配置
+                    ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
+                    int sw = baseInfo.width, sh = baseInfo.height;
+                    ConvertFiles( template, sw, sh, project, dw, dh );
+
+                    // 修正所有坐标，写入项目名称
+                    AdjustSettings(sw, sh);
+
+                    // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
+                    if (_curConfig.ThemeFolder != template)
                     {
-                        ConvertFiles(theme, project + DATA_FOLDER);
+                        // 读取所选主题配置
+                        ProjectProperty themeInfo = _curConfig.ReadThemeInfo();
+                        sw = themeInfo.width; sh = themeInfo.height;
+
+                        // 主题的文件直接拷入数据目录
+                        ConvertFiles(_curConfig.ThemeFolder, sw, sh, _curConfig.ProjectDataFolder, dw, dh);
+
+                        // 修正所有坐标，写入项目名称
+                        AdjustSettings(sw, sh);
                     }
-
-                    // TODO: 修正所有坐标，写入项目名称
-
                 };
 
                 // 启动一个线程来拷贝文件，防止UI死锁
@@ -664,7 +930,7 @@ namespace ResConverter
         }
 
         // 工具函数：拷贝并缩放文件
-        void ConvertFiles(string srcPath, string destPath)
+        void ConvertFiles(string srcPath, int sw, int sh, string destPath, int dw, int dh)
         {
             string title = this.Text;
 
@@ -679,10 +945,6 @@ namespace ResConverter
                 ResConfig resource = new ResConfig();
                 resource.path = srcPath;
                 resource.name = NAME_DEFAULT_THEME;
-
-                // TODO: 从配置里读取源图片大小
-                int sw = 1024, sh = 768;
-                int dw = _curConfig._width, dh = _curConfig._height;
 
                 int cutLen = srcPath.Length;
                 foreach (string srcfile in srcFiles)
@@ -734,6 +996,52 @@ namespace ResConverter
             }));
         }
 
+        // 工具函数：修正目标项目文件夹中的配置
+        void AdjustSettings(int sw, int sh)
+        {
+            string dataPath = _curConfig.ProjectDataFolder;
+            int dh = _curConfig._height;
+            int dw = _curConfig._width;
+            string title = _curConfig.ProjectName;
+
+            ProjectConfig.ModifySetting(dataPath, title, dh, dw);
+
+            ProjectConfig.ModifyConfig(dataPath, title, dh, dw);
+
+            // 检查是否需要
+            if (sw != dw || sh != dh)
+            {
+                ProjectConfig.ModifyLayout(dataPath, sw, sh, dh, dw);
+            }
+        }
+
+        // 读了主题目录中所有的目录和根目录下的问卷
+        private void LoadThemeFiles()
+        {
+            // 主题的Data目录
+            string theme = _curConfig.ThemeFolder;
+
+            try
+            {
+                lstScale.BeginUpdate();
+                lstScale.Items.Clear();
+
+                // 读取主题目录下的文件列表
+                string[] subDirs = Directory.GetDirectories(theme);
+                foreach (string dir in subDirs)
+                {
+                    lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
+                }
+                string[] files = Directory.GetFiles(theme);
+                foreach (string file in files)
+                {
+                    lstScale.Items.Add(Path.GetFileName(file));
+                }
+                lstScale.EndUpdate();
+            }
+            catch (System.Exception) { }
+        }
+
         // 标记是否在操作下拉列表，防止和数字选择控件相互调用
         bool _isSelectingRes = false;
         private void cbResolution_SelectedIndexChanged(object sender, EventArgs e)
@@ -775,7 +1083,7 @@ namespace ResConverter
 
         private void lstTemplate_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // 记录选取的皮肤目录
+            // 记录选取的主题目录
             if (lstTemplate.SelectedIndex > 0)
             {
                 string lastSelect = lstTemplate.SelectedItem as string;
@@ -786,7 +1094,9 @@ namespace ResConverter
                 _curConfig.ThemeName = string.Empty;
             }
 
-            txtTemplate.Text = _curConfig.GetProjectInfo();
+            ProjectProperty info = _curConfig.ReadThemeInfo();
+            txtTemplate.Text = info.readme;
+            txtProjectName.Text = info.title;
         }
 
         private void Wizard_FormClosing(object sender, FormClosingEventArgs e)

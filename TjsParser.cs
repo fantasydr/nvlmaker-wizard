@@ -138,6 +138,38 @@ namespace Tjs
             this.t = TjsType.Dictionary;
         }
 
+        public string GetString(string name)
+        {
+            TjsValue v = null;
+            this.val.TryGetValue(name, out v);
+
+            TjsString ret = v as TjsString;
+            return (ret != null) ? ret.val : null;
+        }
+
+        public TjsString SetString(string name, string value)
+        {
+            TjsString v = new TjsString(value);
+            this.val[name] = v;
+            return v;
+        }
+
+        public double GetNumber(string name)
+        {
+            TjsValue v = null;
+            this.val.TryGetValue(name, out v);
+
+            TjsNumber ret = v as TjsNumber;
+            return (ret != null) ? ret.val : double.NaN;
+        }
+
+        public TjsNumber SetNumber(string name, double value)
+        {
+            TjsNumber v = new TjsNumber(value);
+            this.val[name] = v;
+            return v;
+        }
+
         public override string ToString()
         {
             StringBuilder buf = new StringBuilder();
@@ -156,8 +188,8 @@ namespace Tjs
             int count = 0;
             foreach (KeyValuePair<string, TjsValue> kv in this.val)
             {
-                buf.Append(currentIndent); buf.Append(kv.Key);
-                buf.Append(" => "); buf.Append(kv.Value.ToString());
+                buf.Append(currentIndent); buf.Append("\""); buf.Append(kv.Key);
+                buf.Append("\" => "); buf.Append(kv.Value.ToString());
 
                 // 末尾追加逗号分隔符
                 if (++count < this.val.Count) buf.AppendLine(",");
@@ -449,7 +481,16 @@ namespace Tjs
                     // 读取键值
                     if(token.t == TokenType.String && key == null)
                     {
-                        key = token.val;
+                        TjsString tmp = token.ToTjsString();
+                        if(tmp == null)
+                        {
+                            // 无效的键值
+                            ShowError("Invalid Key");
+                            break;
+                        }
+
+                        // 去掉双引号
+                        key = tmp.val;
                         
                         if(inner.ContainsKey(key))
                         {
