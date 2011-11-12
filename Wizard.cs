@@ -49,6 +49,12 @@ namespace Wizard
                     return;
                 }
 
+                // 禁用上一个页面
+                if (_curStep >= 0 && _curStep < _stepGroups.Length)
+                {
+                    _stepGroups[_curStep].Enabled = false;
+                }
+
                 // 更新步骤
                 _curStep = value;
                 if (_curStep < 0) 
@@ -62,6 +68,7 @@ namespace Wizard
 
                 // 按照当前步骤显式隐藏对应面板
                 _stepGroups[_curStep].BringToFront();
+                _stepGroups[_curStep].Enabled = true;
 
                 // 控制按钮显示
                 btnNext.Enabled = _curStep < _stepGroups.Length - 1;
@@ -102,6 +109,7 @@ namespace Wizard
             {
                 // 把版面位置都同步到第一个的位置
                 _stepGroups[i].Location = _stepGroups[0].Location;
+                _stepGroups[i].Enabled = false;
             }
 
             // 绑定当前方法
@@ -113,6 +121,9 @@ namespace Wizard
             };
 
             this.Step = 0;
+
+            // 读取默认模板信息
+            LoadProjectProperty();
 
             this.ResumeLayout();
         }
@@ -238,32 +249,23 @@ namespace Wizard
         {
             ProjectProperty info = _curConfig.ReadThemeInfo();
 
-            txtResolution.Text = "图片原始分辨率：";
+            txtResolution.Text = "原始分辨率：";
 
             // 第二步的说明窗口，目前也只有这么一个属性可以显示
-            string name = _curConfig.IsDefaultTheme ? WizardConfig.NAME_DEFAULT_THEME:_curConfig.ThemeName;
-            txtResolution.Text += string.Format("{0}{0}【{3}】: {1}x{2}",
+            string name = _curConfig.IsDefaultTheme ? WizardConfig.NAME_DEFAULT_THEME : _curConfig.ThemeName;
+            txtResolution.Text += string.Format("{0}{0}【{3}】 {1}x{2}",
                                                Environment.NewLine, info.width, info.height, name);
 
             // 是否选择了默认主题，没选则附加默认主题属性
             if (!_curConfig.IsDefaultTheme)
             {
                 ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
-                txtResolution.Text += string.Format("{0}{0}【{3}】: {1}x{2}",
+                txtResolution.Text += string.Format("{0}{0}【{3}】 {1}x{2}",
                     Environment.NewLine, baseInfo.width, baseInfo.height, WizardConfig.NAME_DEFAULT_THEME);
-            }
 
-            // 选定分辨率
-            int w = info.width, h = info.height;
-            for(int i=0;i<cbResolution.Items.Count;i++)
-            {
-                Resolution r = cbResolution.Items[i] as Resolution;
-                if (r != null && r._w == w && r._h == h )
-                {
-                    cbResolution.SelectedIndex = i;
-                    break;
-                }
-            }            
+                txtResolution.Text += string.Format("{0}{0}注意：【{2}】将覆盖【{1}】中的同名文件。",
+                                               Environment.NewLine, WizardConfig.NAME_DEFAULT_THEME, name);
+            }    
 
             // 这里本来应该根据缩放策略配置来显示每个文件如何缩放
             // 先简单列一下文件和目录吧……
@@ -419,6 +421,26 @@ namespace Wizard
             catch (System.Exception e) { }
         }
 
+        private void LoadProjectProperty()
+        {
+            // 读取项目说明
+            ProjectProperty info = _curConfig.ReadThemeInfo();
+            txtTemplate.Text = info.readme;
+            txtProjectName.Text = info.title;
+
+            // 选定分辨率
+            int w = info.width, h = info.height;
+            for (int i = 0; i < cbResolution.Items.Count; i++)
+            {
+                Resolution r = cbResolution.Items[i] as Resolution;
+                if (r != null && r._w == w && r._h == h)
+                {
+                    cbResolution.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+
         // 标记是否在操作下拉列表，防止和数字选择控件相互调用
         bool _isSelectingRes = false;
         private void cbResolution_SelectedIndexChanged(object sender, EventArgs e)
@@ -458,29 +480,36 @@ namespace Wizard
             }
         }
 
+        private void txtProjectName_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                btnNext_Click(sender, null);
+            }
+        }
+
         private void lstTemplate_SelectedIndexChanged(object sender, EventArgs e)
         {
             // 记录选取的主题目录
+            string theme = string.Empty;
             if (lstTemplate.SelectedIndex > 0)
             {
                 string lastSelect = lstTemplate.SelectedItem as string;
-                _curConfig.ThemeName = lastSelect.Trim();
+                theme = lastSelect.Trim();
             }
-            else
+            
+            if(theme != _curConfig.ThemeName)
             {
-                _curConfig.ThemeName = string.Empty;
+                _curConfig.ThemeName = theme;
+                LoadProjectProperty();
             }
-
-            ProjectProperty info = _curConfig.ReadThemeInfo();
-            txtTemplate.Text = info.readme;
-            txtProjectName.Text = info.title;
         }
 
         private void Wizard_FormClosing(object sender, FormClosingEventArgs e)
         {
             if(!btnExit.Enabled)
             {
-                MessageBox.Show("正在创建项目，请稍候……", this.Text);
+                MessageBox.Show("正在创建项目，请稍候……", (_titleSaved != null) ? _titleSaved : this.Text);
                 e.Cancel = true;
             }
         }

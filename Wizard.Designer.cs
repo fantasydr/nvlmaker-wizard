@@ -126,7 +126,6 @@ namespace Wizard
             this.txtResolution.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             this.txtResolution.Size = new System.Drawing.Size(190, 130);
             this.txtResolution.TabIndex = 13;
-            this.txtResolution.WordWrap = false;
             // 
             // label2
             // 
@@ -166,7 +165,7 @@ namespace Wizard
             0});
             this.numWidth.Name = "numWidth";
             this.numWidth.Size = new System.Drawing.Size(71, 21);
-            this.numWidth.TabIndex = 7;
+            this.numWidth.TabIndex = 6;
             this.numWidth.ValueChanged += new System.EventHandler(this.numResolution_ValueChanged);
             // 
             // numHeight
@@ -179,7 +178,7 @@ namespace Wizard
             0});
             this.numHeight.Name = "numHeight";
             this.numHeight.Size = new System.Drawing.Size(71, 21);
-            this.numHeight.TabIndex = 6;
+            this.numHeight.TabIndex = 7;
             this.numHeight.ValueChanged += new System.EventHandler(this.numResolution_ValueChanged);
             // 
             // gbStep3
@@ -223,6 +222,7 @@ namespace Wizard
             this.txtProjectName.Size = new System.Drawing.Size(190, 21);
             this.txtProjectName.TabIndex = 13;
             this.txtProjectName.TextChanged += new System.EventHandler(this.txtProjectName_TextChanged);
+            this.txtProjectName.KeyUp += new System.Windows.Forms.KeyEventHandler(this.txtProjectName_KeyUp);
             // 
             // label5
             // 

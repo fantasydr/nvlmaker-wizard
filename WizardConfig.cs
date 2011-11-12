@@ -540,10 +540,16 @@ namespace Wizard
             sb.AppendFormat("== 项目配置清单 =="); sb.Append(Environment.NewLine);
 
             sb.Append(Environment.NewLine);
-            string theme = (this.IsDefaultTheme) ? this.ThemeName : NAME_DEFAULT_THEME;
+            string theme = (this.IsDefaultTheme) ? NAME_DEFAULT_THEME : this.ThemeName;
             sb.AppendFormat("所选主题：{0}", theme); sb.Append(Environment.NewLine);
-            sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height); sb.Append(Environment.NewLine);
-            
+            sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height); 
+            ProjectProperty info = ReadThemeInfo();
+            if(info.width != _width || info.height != this._height)
+            {
+                sb.AppendFormat(" (非原始分辨率)");
+            }
+            sb.Append(Environment.NewLine);
+
             sb.Append(Environment.NewLine);
             sb.AppendFormat("项目名称：{0}", this._projectName);sb.Append(Environment.NewLine);
             sb.AppendFormat("项目位置：{0}", this.ProjectFolder); sb.Append(Environment.NewLine);
