@@ -140,9 +140,18 @@ namespace Wizard
             {
                 num = num * scale;
                 dict.SetNumber(name, Math.Floor(num));
+                return num;
             }
 
-            return num;
+            string str = dict.GetString(name);
+            if(double.TryParse(str, out num))
+            {
+                num = num * scale;
+                dict.SetString(name, Math.Floor(num).ToString());
+                return num;
+            }
+
+            return double.NaN;
         }
 
         public static TjsArray ScalePosArray(TjsDict dict, string name, double scaleX, double scaleY)
@@ -604,8 +613,13 @@ namespace Wizard
 
             ConvertHelper.ScaleInteger(dict, "left", scaleX);
             ConvertHelper.ScaleInteger(dict, "x", scaleX);
+            ConvertHelper.ScaleInteger(dict, "marginr", scaleX);
+            ConvertHelper.ScaleInteger(dict, "marginl", scaleX);
+
             ConvertHelper.ScaleInteger(dict, "top", scaleY);
             ConvertHelper.ScaleInteger(dict, "y", scaleY);
+            ConvertHelper.ScaleInteger(dict, "margint", scaleY);
+            ConvertHelper.ScaleInteger(dict, "marginb", scaleY);
 
             // ÐÞ¸ÄlocateÊý×é
             ConvertHelper.ScalePosArray(dict, "locate", scaleX, scaleY);
