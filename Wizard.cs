@@ -9,6 +9,7 @@ using System.IO;
 using System.Threading;
 using Tjs;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 namespace ResConverter
 {
@@ -25,6 +26,9 @@ namespace ResConverter
 
         const string NAME_DEFAULT_THEME = "默认主题";
         const string NAME_CUSTOM_RESOLUTION = "(自定义)";
+
+        const int DEFAULT_WIDTH = 1024;
+        const int DEFAULT_HEIGHT = 768;
 
         // 分辨率设置对象
         class Resolution
@@ -348,6 +352,18 @@ namespace ResConverter
                         }
                     }
 
+                    ProjectProperty info = ReadThemeInfo();
+                    if(info == null || info.height <= 0 || info.width <= 0)
+                    {
+                        if (output != null) output.WriteLine("警告：主题分辨率错误。");
+                    }
+
+                    ProjectProperty baseInfo = ReadBaseTemplateInfo();
+                    if (baseInfo != info && (baseInfo == null || baseInfo.height <= 0 || baseInfo.width <= 0))
+                    {
+                        if (output != null) output.WriteLine("警告：默认主题分辨率错误。");
+                    }
+
                     // 生成配置报告
                     if(output != null)
                     {
@@ -458,7 +474,79 @@ namespace ResConverter
             #region 工具函数
             public static void ModifyDict(TjsDict dict, int sw, int sh, int dw, int dh)
             {
+                double num = dict.GetNumber("left");
+                if(!double.IsNaN(num))
+                {
+                    num = num * dw / sw;
+                    dict.SetNumber("left", Math.Floor(num));
+                }
 
+                num = dict.GetNumber("top");
+                if (!double.IsNaN(num))
+                {
+                    num = num * dh / sh;
+                    dict.SetNumber("top", Math.Floor(num));
+                }
+
+                num = dict.GetNumber("x");
+                if (!double.IsNaN(num))
+                {
+                    num = num * dw / sw;
+                    dict.SetNumber("x", Math.Floor(num));
+                }
+
+                num = dict.GetNumber("y");
+                if (!double.IsNaN(num))
+                {
+                    num = num * dh / sh;
+                    dict.SetNumber("y", Math.Floor(num));
+                }
+
+                // 修改locate数组
+                TjsValue v = null;
+                if (dict.val.TryGetValue("locate", out v))
+                {
+                    TjsArray locate = v as TjsArray;
+                    if(locate != null)
+                    {
+                        List<TjsValue> locatenew = new List<TjsValue>();
+                        foreach (TjsValue pos in locate.val)
+                        {
+                            TjsArray xy = pos as TjsArray;
+                            if(xy != null && xy.val.Count == 2)
+                            {
+                                TjsNumber x = xy.val[0] as TjsNumber;
+                                TjsNumber y = xy.val[1] as TjsNumber;
+                                if(x != null && y != null)
+                                {
+                                    List<TjsValue> posnew = new List<TjsValue>();
+                                    posnew.Add(new TjsNumber(Math.Floor(x.val * dw / sw)));
+                                    posnew.Add(new TjsNumber(Math.Floor(y.val * dh / sh)));
+                                    locatenew.Add(new TjsArray(posnew));
+                                }
+                                else
+                                {
+                                    Debug.Assert(false, "invalid pos element");
+                                }
+                            }
+                            else
+                            {
+                                Debug.Assert(false, "invalid pos array");
+                            }
+                        }
+
+                        dict.val["locate"] = new TjsArray(locatenew);
+                    }
+                }
+
+                foreach (KeyValuePair<string, TjsValue> kv in dict.val)
+                {
+                    TjsDict inner = kv.Value as TjsDict;
+                    if(inner != null)
+                    {
+                        ModifyDict(inner, sw, sh, dw, dh);
+                    }
+                }
             }
 
             public static void ModifyLayout(string dataPath, int sw, int sh, int dh, int dw)
@@ -809,6 +897,8 @@ namespace ResConverter
             // 保存上一步的结果
             _curConfig._width = (int)numWidth.Value;
             _curConfig._height = (int)numHeight.Value;
+            
+            txtProjectName.SelectAll();
             txtProjectName.Focus();
         }
 
@@ -882,7 +972,12 @@ namespace ResConverter
 
             // 读取基础模板的配置
             ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
-            int sw = baseInfo.width, sh = baseInfo.height;
+
+            int sw = baseInfo.width;
+            if (sw <= 0) sw = DEFAULT_WIDTH;
+            int sh = baseInfo.height;
+            if (sh <= 0) sh = DEFAULT_HEIGHT;
+
             ConvertFiles(template, sw, sh, project, dw, dh);
 
             // 修正所有坐标，写入项目名称
@@ -893,7 +988,11 @@ namespace ResConverter
             {
                 // 读取所选主题配置
                 ProjectProperty themeInfo = _curConfig.ReadThemeInfo();
-                sw = themeInfo.width; sh = themeInfo.height;
+
+                sw = themeInfo.width;
+                if (sw <= 0) sw = DEFAULT_WIDTH;
+                sh = themeInfo.height;
+                if (sh <= 0) sh = DEFAULT_HEIGHT;
 
                 // 主题的文件直接拷入数据目录
                 ConvertFiles(_curConfig.ThemeFolder, sw, sh, _curConfig.ProjectDataFolder, dw, dh);
