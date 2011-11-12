@@ -5,645 +5,18 @@ using System.Data;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
+
 using System.IO;
 using System.Threading;
 using Tjs;
-using System.Text.RegularExpressions;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace ResConverter
 {
     public partial class Wizard : Form
     {
-        const string THEME_FOLDER = "\\skin";
-        const string TEMPLATE_FOLDER = "\\project\\template";
-        const string DATA_FOLDER = "\\data";
-        const string PROJECT_FOLDER = "\\project";
-
-        const string UI_LAYOUT = "macro\\ui*.tjs";
-        const string UI_SETTING = "macro\\setting.tjs";
-        const string UI_CONFIG = "Config.tjs";
-
-        const string NAME_DEFAULT_THEME = "默认主题";
         const string NAME_CUSTOM_RESOLUTION = "(自定义)";
-
-        const int DEFAULT_WIDTH = 1024;
-        const int DEFAULT_HEIGHT = 768;
-
-        // 分辨率设置对象
-        class Resolution
-        {
-            public int _w;
-            public int _h;
-
-            public Resolution(int w, int h) { _w = w; _h = h; }
-            public override string ToString()
-            {
-                const float delta = 0.001f;
-
-                string ratioStr = string.Empty;
-
-                float ratio = (float)_w / _h;
-                if (Math.Abs(ratio - 4.0 / 3.0) < delta)
-                {
-                    ratioStr = "(4:3)";
-                }
-                else if (Math.Abs(ratio - 16.0 / 10.0) < delta)
-                {
-                    ratioStr = "(16:10)";
-                }
-                else if (Math.Abs(ratio - 16.0 / 9.0) < delta)
-                {
-                    ratioStr = "(16:9)";
-                }
-                else if (Math.Abs(ratio - 5.0 / 4.0) < delta)
-                {
-                    ratioStr = "(5:4)";
-                }
-
-                return string.Format("{0}x{1} {2}", _w, _h, ratioStr);
-            }
-
-            public static Resolution[] List
-            {
-                get
-                {
-                    return new Resolution[] {
-                    new Resolution(640, 480),
-                    new Resolution(800, 600),
-                    new Resolution(1024, 768),
-                    new Resolution(1152, 864),
-                    new Resolution(1280, 720),
-                    new Resolution(1280, 800),
-                    new Resolution(1280, 960),
-                    new Resolution(1280, 1024),
-                    new Resolution(1366, 768),
-                    new Resolution(1400, 1050),
-                    new Resolution(1440, 900),
-                    new Resolution(1680, 1050),
-                    new Resolution(1920, 1080),
-                    };
-                }
-            }
-        }
-
-        // 模板的基本属性
-        class ProjectProperty
-        {
-            public string readme = string.Empty;
-
-            public string title
-            {
-                get
-                {
-                    // 读取标题
-                    string ret = null;
-                    if (_setting != null)
-                    {
-                        ret = _setting.GetString("title");
-                    }
-                    return ret == null ? string.Empty : ret;
-                }
-            }
-            
-            public int width
-            {
-                get
-                {
-                    // 读取预设宽度
-                    double ret = double.NaN;
-                    if (_setting != null)
-                    {
-                        ret = _setting.GetNumber("width");
-                    }
-                    return double.IsNaN(ret) ? 0 : (int)ret;
-                }
-            }
-
-            public int height
-            {
-                get
-                {
-                    // 读取预设高度
-                    double ret = double.NaN;
-                    if (_setting != null)
-                    {
-                        ret = _setting.GetNumber("height");
-                    }
-                    return double.IsNaN(ret) ? 0 : (int)ret;
-                }
-            }
-            
-            TjsDict _setting = null;
-
-            public void LoadSetting(string file)
-            {
-                _setting = null;
-
-                if (File.Exists(file))
-                {
-                    using (StreamReader r = new StreamReader(file))
-                    {
-                        TjsParser parser = new TjsParser();
-                        TjsDict setting = parser.Parse(r) as TjsDict;
-                        _setting = setting;
-                    }
-                }
-            }
-        }
-
-        // 项目向导配置对象
-        class WizardConfig
-        {
-            #region 数据成员
-            private string _baseFolder = string.Empty; // nvlmaker根目录
-            private string _themeName = string.Empty; // 主题目录名
-
-            public int _height; // 分辨率-高度
-            public int _width;  // 分辨率-宽度
-
-            private string _projectName = string.Empty;     // 项目名称
-            private string _projectFolder = string.Empty;   // 项目目录，空则取名称作为目录
-
-            // 目前缩放就按默认做
-            private string _scaler = ResFile.SCALER_DEFAULT; // 缩放策略，目前只有这种:(
-            private string _quality = ResFile.QUALITY_DEFAULT;   // 缩放质量，默认是高
-
-            // 储存上次读取的主体属性，避免多次读取
-            private ProjectProperty _themeInfo = null;
-            #endregion
-
-            // nvlmaker根路径
-            public string BaseFolder
-            {
-                get
-                {
-                    // 软件根目录绝对路径，不包括结尾的 “\”
-                    return _baseFolder;
-                }
-                set
-                {
-                    // 处理下，保证不为空指针或空白字串
-                    _baseFolder = (value == null ? string.Empty : value.Trim());
-                }
-            }
-
-            // 基础模板路径
-            public string BaseTemplateFolder
-            {
-                get
-                {
-                    return this.BaseFolder + TEMPLATE_FOLDER;
-                }
-            }
-
-            // 主题名称
-            public string ThemeName
-            {
-                get
-                {
-                    return _themeName;
-                }
-                set
-                {
-                    // 处理下，保证不为空指针或空白字串
-                    string themeName = (value == null ? string.Empty : value.Trim());
-
-                    // 如果主题更换则清空预读的设置
-                    if(themeName != _themeName)
-                    {
-                        this._themeName = themeName;
-                        this._themeInfo = null;
-                    }
-                }
-            }
-
-            // 主题路径
-            public string ThemeFolder
-            {
-                get
-                {
-                    // 0长度字串表示没有使用主题
-                    if(_themeName.Length == 0)
-                    {
-                        return this.BaseTemplateFolder;
-                    }
-                    else
-                    {
-                        // 连接主题目录和根目录
-                        return this.BaseFolder + THEME_FOLDER + "\\" + _themeName;
-                    }
-                }
-            }
-
-            // 主题配置文件
-            public string ThemeSetting
-            {
-                get
-                {
-                    return Path.Combine(this.ThemeDataFolder, UI_SETTING);
-                }
-            }
-
-            // 主题的数据目录
-            public string ThemeDataFolder
-            {
-                get
-                {
-                    // 0长度字串表示没有使用主题
-                    if (_themeName.Length == 0)
-                    {
-                        return this.ThemeFolder + DATA_FOLDER; 
-                    }
-                    else
-                    {
-                        return this.ThemeFolder;
-                    }
-                }
-            }
-
-            // 目标项目路径
-            public string ProjectFolder
-            {
-                get
-                {
-                    if (_projectFolder.Length == 0)
-                    {
-                        return this.BaseFolder + PROJECT_FOLDER + "\\" + _projectName;
-                    }
-                    else
-                    {
-                        return this.BaseFolder + PROJECT_FOLDER + "\\" + _projectFolder;
-                    }
-                }
-                set
-                {
-                    // 0长度字串表示没有单独设置项目目录
-                    _projectFolder = (value == null ? string.Empty : value.Trim());
-                }
-            }
-
-            // 目标项目数据路径
-            public string ProjectDataFolder
-            {
-                get
-                {
-                    return this.ProjectFolder + DATA_FOLDER;
-                }
-            }
-
-            // 目标项目名称
-            public string ProjectName
-            {
-                get
-                {
-                    return _projectName;
-                }
-                set
-                {
-                    // 处理下，保证不为空指针或空白字串
-                    _projectName = (value == null ? string.Empty : value.Trim());
-                }
-            }
-
-            // 检查这个配置是否已经完备，把出错信息写入output
-            public bool IsReady(TextWriter output)
-            {
-                try
-                {
-                    string path = this.BaseFolder;
-                    if (string.IsNullOrEmpty(_baseFolder) || !Directory.Exists(path))
-                    {
-                        if (output != null) output.WriteLine("软件根目录不存在。");
-                        return false;
-                    }
-
-                    if (_height <= 0 || _width <= 0)
-                    {
-                        if (output != null) output.WriteLine("错误：无效的分辨率设置。");
-                        return false;
-                    }
-
-                    path = this.ProjectFolder;
-                    if (string.IsNullOrEmpty(_projectName))
-                    {
-                        if (output != null) output.WriteLine("错误：无效的项目名称。");
-                        return false;
-                    }
-                    else if (Directory.Exists(path))
-                    {
-                        if (output != null) output.WriteLine("错误：项目文件夹已存在，请更换项目名或设置其他路径。");
-                        return false;
-                    }
-
-                    path = this.ThemeFolder;
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        if (!Directory.Exists(path))
-                        {
-                            if (output != null) output.WriteLine("错误：主题目录不存在。");
-                            return false;
-                        }
-
-                        path = this.ThemeSetting;
-                        if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                        {
-                            if (output != null) output.WriteLine("警告：主题缺少配置文件");
-                        }
-                    }
-
-                    ProjectProperty info = ReadThemeInfo();
-                    if(info == null || info.height <= 0 || info.width <= 0)
-                    {
-                        if (output != null) output.WriteLine("警告：主题分辨率错误。");
-                    }
-
-                    ProjectProperty baseInfo = ReadBaseTemplateInfo();
-                    if (baseInfo != info && (baseInfo == null || baseInfo.height <= 0 || baseInfo.width <= 0))
-                    {
-                        if (output != null) output.WriteLine("警告：默认主题分辨率错误。");
-                    }
-
-                    // 生成配置报告
-                    if(output != null)
-                    {
-                        output.WriteLine(this.ToString());
-                    }
-                }
-                catch (System.Exception e)
-                {
-                    if (output != null) output.WriteLine("无效的项目配置：" + e.Message);
-                    return false;
-                }
-
-                return true;
-            }
-
-            // 根据配置的内容生成报告
-            public override string ToString()
-            {
-                StringBuilder sb = new StringBuilder();
-                sb.AppendFormat("== 项目配置清单 =="); sb.Append(Environment.NewLine);
-
-                sb.Append(Environment.NewLine);
-                string theme = this._themeName;
-                if (string.IsNullOrEmpty(theme)) theme = NAME_DEFAULT_THEME;
-                sb.AppendFormat("所选主题：{0}", theme); sb.Append(Environment.NewLine);
-                sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height); sb.Append(Environment.NewLine);
-                
-                sb.Append(Environment.NewLine);
-                sb.AppendFormat("项目名称：{0}", this._projectName);sb.Append(Environment.NewLine);
-                sb.AppendFormat("项目位置：{0}", this.ProjectFolder); sb.Append(Environment.NewLine);
-                
-                sb.Append(Environment.NewLine);
-                sb.AppendFormat("缩放策略：{0}", this._scaler); sb.Append(Environment.NewLine);
-                sb.AppendFormat("缩放质量：{0}", this._quality); sb.Append(Environment.NewLine);
-                sb.AppendFormat("NVLMaker目录：{0}", this.BaseFolder);sb.Append(Environment.NewLine);
-                return sb.ToString();
-            }
-
-            // 读取所选主题的属性
-            public ProjectProperty ReadThemeInfo()
-            {
-                // 直接返回读取值
-                if (this._themeInfo != null)
-                {
-                    return this._themeInfo;
-                }
-
-                ProjectProperty info = new ProjectProperty();
-                this._themeInfo = info;
-
-                // 读取readme文件作为显示内容
-                try
-                {
-                    string readmefile = Path.Combine(this.ThemeDataFolder, "Readme.txt");
-                    if (File.Exists(readmefile))
-                    {
-                        using (StreamReader r = new StreamReader(readmefile))
-                        {
-                            info.readme = r.ReadToEnd();
-                        }
-                    }
-                }
-                catch (System.Exception e)
-                {
-                    // 出错的不保留
-                    this._themeInfo = null;
-                    info.readme = e.Message;
-                }
-
-                // 读取设置文件
-                try
-                {
-                    info.LoadSetting(this.ThemeSetting);
-                }
-                catch (System.Exception e)
-                {
-                    // 出错的不保留
-                    this._themeInfo = null;
-                    info.readme = e.Message;
-                }
-                
-                return info;
-            }
-
-            // 读取基础模板的配置
-            public ProjectProperty ReadBaseTemplateInfo()
-            {
-                // 如果选的是默认的主题，则返回主题属性
-                if(this.BaseTemplateFolder == this.ThemeFolder)
-                {
-                    return this.ReadThemeInfo();
-                }
-
-                // 这里就不读readme了，也不做保存，每次调用都从文件读一次
-                string file = Path.Combine(this.BaseTemplateFolder + DATA_FOLDER, UI_SETTING);
-                ProjectProperty info = new ProjectProperty();
-                try
-                {
-                    info.LoadSetting(file);
-                }
-                catch (System.Exception e)
-                {
-                    info.readme = e.Message;
-                }
-                return info;
-            }
-
-            #region 工具函数
-            public static void ModifyDict(TjsDict dict, int sw, int sh, int dw, int dh)
-            {
-                double num = dict.GetNumber("left");
-                if(!double.IsNaN(num))
-                {
-                    num = num * dw / sw;
-                    dict.SetNumber("left", Math.Floor(num));
-                }
-
-                num = dict.GetNumber("top");
-                if (!double.IsNaN(num))
-                {
-                    num = num * dh / sh;
-                    dict.SetNumber("top", Math.Floor(num));
-                }
-
-                num = dict.GetNumber("x");
-                if (!double.IsNaN(num))
-                {
-                    num = num * dw / sw;
-                    dict.SetNumber("x", Math.Floor(num));
-                }
-
-                num = dict.GetNumber("y");
-                if (!double.IsNaN(num))
-                {
-                    num = num * dh / sh;
-                    dict.SetNumber("y", Math.Floor(num));
-                }
-
-                // 修改locate数组
-                TjsValue v = null;
-                if (dict.val.TryGetValue("locate", out v))
-                {
-                    TjsArray locate = v as TjsArray;
-                    if(locate != null)
-                    {
-                        List<TjsValue> locatenew = new List<TjsValue>();
-                        foreach (TjsValue pos in locate.val)
-                        {
-                            TjsArray xy = pos as TjsArray;
-                            if(xy != null && xy.val.Count == 2)
-                            {
-                                TjsNumber x = xy.val[0] as TjsNumber;
-                                TjsNumber y = xy.val[1] as TjsNumber;
-                                if(x != null && y != null)
-                                {
-                                    List<TjsValue> posnew = new List<TjsValue>();
-                                    posnew.Add(new TjsNumber(Math.Floor(x.val * dw / sw)));
-                                    posnew.Add(new TjsNumber(Math.Floor(y.val * dh / sh)));
-                                    locatenew.Add(new TjsArray(posnew));
-                                }
-                                else
-                                {
-                                    Debug.Assert(false, "invalid pos element");
-                                }
-                            }
-                            else
-                            {
-                                Debug.Assert(false, "invalid pos array");
-                            }
-                        }
-
-                        dict.val["locate"] = new TjsArray(locatenew);
-                    }
-                }
-
-                foreach (KeyValuePair<string, TjsValue> kv in dict.val)
-                {
-                    TjsDict inner = kv.Value as TjsDict;
-                    if(inner != null)
-                    {
-                        ModifyDict(inner, sw, sh, dw, dh);
-                    }
-                }
-            }
-
-            public static void ModifyLayout(string dataPath, int sw, int sh, int dh, int dw)
-            {
-                // 更新layout
-                string[] layouts = Directory.GetFiles(dataPath, UI_LAYOUT);
-                foreach (string layout in layouts)
-                {
-                    TjsParser parser = new TjsParser();
-                    TjsDict setting = null;
-                    using (StreamReader r = new StreamReader(layout))
-                    {
-                        setting = parser.Parse(r) as TjsDict;
-                    }
-
-                    if (setting != null)
-                    {
-                        ModifyDict(setting, sw, sh, dw, dh);
-                    }
-
-                    using (StreamWriter w = new StreamWriter(layout, false, Encoding.Unicode))
-                    {
-                        w.Write(setting.ToString());
-                    }
-                }
-            }
-
-            public static void ModifyConfig(string dataPath, string title, int dh, int dw)
-            {
-                // 更新config
-                string configFile = Path.Combine(dataPath, UI_CONFIG);
-                if (File.Exists(configFile))
-                {
-                    Regex regTitle = new Regex(@"\s*;\s*System.title\s*=");
-                    Regex regW = new Regex(@"\s*;\s*scWidth\s*=");
-                    Regex regH = new Regex(@"\s*;\s*scHeight\s*=");
-
-                    StringBuilder buf = new StringBuilder();
-                    using (StreamReader r = new StreamReader(configFile))
-                    {
-                        while (!r.EndOfStream)
-                        {
-                            string line = r.ReadLine();
-                            if (regTitle.IsMatch(line))
-                            {
-                                buf.AppendLine(string.Format(";System.title = \"{0}\";", title));
-                            }
-                            else if (regW.IsMatch(line))
-                            {
-                                buf.AppendLine(string.Format(";scWidth = {0};", dw));
-                            }
-                            else if (regH.IsMatch(line))
-                            {
-                                buf.AppendLine(string.Format(";scHeight = {0};", dh));
-                            }
-                            else
-                            {
-                                buf.AppendLine(line);
-                            }
-                        }
-                    }
-
-                    using (StreamWriter w = new StreamWriter(configFile, false, Encoding.Unicode))
-                    {
-                        w.Write(buf.ToString());
-                    }
-                }
-            }
-
-            public static void ModifySetting(string dataPath, string title, int dh, int dw)
-            {
-                // 更新setting
-                string settingFile = Path.Combine(dataPath, UI_SETTING);
-                if (File.Exists(settingFile))
-                {
-                    TjsParser parser = new TjsParser();
-
-                    TjsDict setting = null;
-                    using (StreamReader r = new StreamReader(settingFile))
-                    {
-                        setting = parser.Parse(r) as TjsDict;
-                    }
-
-                    if (setting != null)
-                    {
-                        setting.SetString("title", title);
-                        setting.SetNumber("width", dw);
-                        setting.SetNumber("height", dh);
-                        using (StreamWriter w = new StreamWriter(settingFile, false, Encoding.Unicode))
-                        {
-                            w.Write(setting.ToString());
-                        }
-                    }
-                }
-            }
-            #endregion
-        }
 
         // 正在操作的配置
         WizardConfig _curConfig = new WizardConfig();
@@ -755,7 +128,7 @@ namespace ResConverter
             ret = regW.IsMatch(strW);
             ret = regH.IsMatch(strH);
 
-            string[] layouts = Directory.GetFiles(_curConfig.ThemeDataFolder, UI_LAYOUT);
+            string[] layouts = Directory.GetFiles(_curConfig.ThemeDataFolder, WizardConfig.UI_LAYOUT);
 
             // 测试tjs值读取
             foreach (string layout in layouts)
@@ -814,7 +187,7 @@ namespace ResConverter
         private void btnOK_Click(object sender, EventArgs e)
         {
             // 开始建立项目
-            if(MessageBox.Show("开始创建项目？", "确认", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            if(MessageBox.Show("开始创建项目？", this.Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 OnBuild();
             }
@@ -826,13 +199,13 @@ namespace ResConverter
             int selected = 0;
             lstTemplate.BeginUpdate();
             lstTemplate.Items.Clear();
-            lstTemplate.Items.Add(NAME_DEFAULT_THEME);
+            lstTemplate.Items.Add(WizardConfig.NAME_DEFAULT_THEME);
 
             try
             {
                 string lastSelect = _curConfig.ThemeName.ToLower();
                 string root = _curConfig.BaseFolder;
-                string[] themes = Directory.GetDirectories(root + THEME_FOLDER);
+                string[] themes = Directory.GetDirectories(root + WizardConfig.THEME_FOLDER);
                 foreach (string theme in themes)
                 {
                     // 只留目录名
@@ -859,17 +232,19 @@ namespace ResConverter
         {
             ProjectProperty info = _curConfig.ReadThemeInfo();
 
-            txtResolution.Text = "图片原始分辨率如下：";
+            txtResolution.Text = "图片原始分辨率：";
 
             // 第二步的说明窗口，目前也只有这么一个属性可以显示
-            txtResolution.Text += string.Format("{0}{0}=== 所选主题 ==={0}分辨率: {1}x{2}",
-                                               Environment.NewLine, info.width, info.height);
+            string name = _curConfig.IsDefaultTheme ? WizardConfig.NAME_DEFAULT_THEME:_curConfig.ThemeName;
+            txtResolution.Text += string.Format("{0}{0}【{3}】: {1}x{2}",
+                                               Environment.NewLine, info.width, info.height, name);
 
-            ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
-            if(baseInfo != info)
+            // 是否选择了默认主题，没选则附加默认主题属性
+            if (!_curConfig.IsDefaultTheme)
             {
-                txtResolution.Text += string.Format("{0}{0}=== 默认主题 ==={0}分辨率: {1}x{2}",
-                                                    Environment.NewLine, baseInfo.width, baseInfo.height);
+                ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
+                txtResolution.Text += string.Format("{0}{0}【{3}】: {1}x{2}",
+                    Environment.NewLine, baseInfo.width, baseInfo.height, WizardConfig.NAME_DEFAULT_THEME);
             }
 
             // 选定分辨率
@@ -913,7 +288,7 @@ namespace ResConverter
             StringWriter otuput = new StringWriter();
             
             btnOK.Enabled = _curConfig.IsReady(otuput);
-            txtReport.Text = otuput.ToString();
+            ReportRefresh(otuput.ToString());
 
             btnOK.BringToFront();
             btnOK.Show();
@@ -923,6 +298,9 @@ namespace ResConverter
 
         void OnBuild()
         {
+            // 开启Logging
+            LoggingBegin();
+
             // 开始建立项目
             try
             {
@@ -946,20 +324,22 @@ namespace ResConverter
                 btnExit.Show();
                 btnExit.Enabled = true;
 
-                txtReport.Text += "项目建立完毕！";
+                ReportAppend("项目建立完毕！");
             }
             catch (System.Exception e)
             {
                 // 显示错误原因
-                txtReport.Text += e.Message;
+                ReportAppend(e.Message);
 
                 // 恢复按钮
                 btnCancel.Enabled = true;
                 btnPrev.Enabled = true;
             }
+
+            // 结束Logging
+            LoggingEnd();
         }
 
-        #region 工程创建过程
         // 根据配置创建目标项目
         private void BuildProject()
         {
@@ -974,9 +354,9 @@ namespace ResConverter
             ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
 
             int sw = baseInfo.width;
-            if (sw <= 0) sw = DEFAULT_WIDTH;
+            if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
             int sh = baseInfo.height;
-            if (sh <= 0) sh = DEFAULT_HEIGHT;
+            if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
 
             ConvertFiles(template, sw, sh, project, dw, dh);
 
@@ -990,9 +370,9 @@ namespace ResConverter
                 ProjectProperty themeInfo = _curConfig.ReadThemeInfo();
 
                 sw = themeInfo.width;
-                if (sw <= 0) sw = DEFAULT_WIDTH;
+                if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
                 sh = themeInfo.height;
-                if (sh <= 0) sh = DEFAULT_HEIGHT;
+                if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
 
                 // 主题的文件直接拷入数据目录
                 ConvertFiles(_curConfig.ThemeFolder, sw, sh, _curConfig.ProjectDataFolder, dw, dh);
@@ -1033,9 +413,6 @@ namespace ResConverter
         // 工具函数：拷贝并缩放文件
         void ConvertFiles(string srcPath, int sw, int sh, string destPath, int dw, int dh)
         {
-            // 保存窗口标题
-            string title = this.Text;
-
             // 源文件列表
             List<string> srcFiles = new List<string>();
             try
@@ -1043,11 +420,12 @@ namespace ResConverter
                 // 建立目录并获取文件列表
                 CreateDir(srcPath, destPath, srcFiles);
 
-                // 转换图片文件，其他文件直接拷贝
+                // 建立图片转换配置，用于记录需要转换的图片文件，其他文件则直接拷贝
                 ResConfig resource = new ResConfig();
                 resource.path = srcPath;
-                resource.name = NAME_DEFAULT_THEME;
+                resource.name = WizardConfig.NAME_DEFAULT_THEME;
 
+                // 遍历所有文件
                 int cutLen = srcPath.Length;
                 foreach (string srcfile in srcFiles)
                 {
@@ -1066,23 +444,18 @@ namespace ResConverter
                     else
                     {
                         // 直接拷贝
-                        this.BeginInvoke(new ThreadStart(delegate()
-                        {
-                            this.Text = string.Format("{0}: 拷贝{1}", title, relFile);
-                        }));
-
+                        Logging(string.Format("拷贝{0}", relFile));
                         File.Copy(srcfile, Path.Combine(destPath, relFile), true);
                     }
                 }
 
-                this.BeginInvoke(new ThreadStart(delegate()
-                {
-                    this.Text = string.Format("{0}: 图片转换中……", title);
-                }));
+                Logging("图片转换中……");
 
                 if (resource.files.Count > 0)
                 {
+                    // 创建一个图片转换器并开始转换
                     ResConverter conv = new ResConverter();
+                    conv.NotifyProcessEvent += new ResConverter.NotifyProcessHandler(conv_NotifyProcessEvent);
                     conv.Start(resource, destPath, sw, sh, dw, dh);
                 }
 
@@ -1091,12 +464,6 @@ namespace ResConverter
             {
                 Console.WriteLine(e.Message);
             }
-
-            // 恢复窗口标题
-            this.Invoke(new ThreadStart(delegate()
-            {
-                this.Text = title;
-            }));
         }
 
         // 工具函数：修正目标项目文件夹中的配置
@@ -1113,10 +480,7 @@ namespace ResConverter
             }
             catch (System.Exception e)
             {
-                this.BeginInvoke(new ThreadStart(delegate()
-                {
-                    this.txtReport.Text += "修改setting.tjs失败！" + Environment.NewLine;
-                }));
+                ReportAppend("修改setting.tjs失败:" + e.Message);
             }
 
             try
@@ -1125,10 +489,7 @@ namespace ResConverter
             }
             catch (System.Exception e)
             {
-                this.BeginInvoke(new ThreadStart(delegate()
-                {
-                    this.txtReport.Text += "修改Config.tjs失败！" + Environment.NewLine;
-                }));
+                ReportAppend("修改Config.tjs失败:" + e.Message);
             }
             
             // 检查是否需要转换
@@ -1140,14 +501,10 @@ namespace ResConverter
                 }
                 catch (System.Exception e)
                 {
-                    this.BeginInvoke(new ThreadStart(delegate()
-                    {
-                        this.txtReport.Text += "修改界面布局文件失败！" + Environment.NewLine;
-                    }));
+                    ReportAppend("修改界面布局文件失败:" + e.Message);
                 }
             }
         }
-        #endregion
 
         // 读了主题目录中所有的目录和根目录下的问卷
         private void LoadThemeFiles()
@@ -1173,7 +530,53 @@ namespace ResConverter
                 }
                 lstScale.EndUpdate();
             }
-            catch (System.Exception) { }
+            catch (System.Exception e) { }
+        }
+
+        #region Logging函数
+        string _titleSaved = null;
+        void LoggingBegin()
+        {
+            // 保存窗口标题
+            if (_titleSaved == null) { _titleSaved = this.Text; }
+        }
+        void LoggingEnd()
+        {
+            // 恢复窗口标题
+            this.Invoke(new ThreadStart(delegate()
+            {
+                if (_titleSaved != null) { this.Text = _titleSaved; _titleSaved = null; }
+            }));
+        }
+        void Logging(string msg)
+        {
+            if (_titleSaved == null)
+            {
+                Debug.Assert(false, "call LoggingBegin() first");
+                return;
+            }
+
+            this.BeginInvoke(new ThreadStart(delegate()
+            {
+                this.Text = string.Format("{0}: {1}", _titleSaved, msg);
+            }));
+        }
+        #endregion
+
+        void ReportRefresh(string report)
+        {
+            this.Invoke(new ThreadStart(delegate()
+            {
+                txtReport.Text = report;
+            }));
+        }
+
+        void ReportAppend(string report)
+        {
+            this.BeginInvoke(new ThreadStart(delegate()
+            {
+                txtReport.Text += report + Environment.NewLine;
+            }));
         }
 
         // 标记是否在操作下拉列表，防止和数字选择控件相互调用
@@ -1240,6 +643,11 @@ namespace ResConverter
                 MessageBox.Show("正在创建项目，请稍候……");
                 e.Cancel = true;
             }
+        }
+
+        void conv_NotifyProcessEvent(ResConverter sender, ResConverter.NotifyProcessEventArgs e)
+        {
+            Logging(string.Format("({0}/{1}){2} 转换中……", e.index, e.count, e.file));
         }
     }
 }

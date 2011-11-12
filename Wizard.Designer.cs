@@ -319,6 +319,7 @@ namespace ResConverter
             this.Controls.Add(this.gbStep1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
             this.Name = "Wizard";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "项目新建向导";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Wizard_FormClosing);
             this.gbStep1.ResumeLayout(false);

@@ -87,7 +87,7 @@ namespace ResConverter
                     return true;
                 }
             }
-            catch (System.Exception e)
+            catch (System.Exception)
             {
                 return false;
             }
@@ -96,6 +96,35 @@ namespace ResConverter
 
     class ResConverter
     {
+        #region 事件响应：转换进度通知
+        public class NotifyProcessEventArgs : EventArgs
+        {
+            public readonly string file;
+            public readonly int index;
+            public readonly int count;
+
+            public NotifyProcessEventArgs(string file, int index, int count)
+            {
+                this.file = file;
+                this.index = index;
+                this.count = count;
+            }
+        }
+        // 转换进度通知响应函数
+        public delegate void NotifyProcessHandler(ResConverter sender, NotifyProcessEventArgs e);
+        // 转换进度通知事件
+        public event NotifyProcessHandler NotifyProcessEvent;
+        // 转换进度通知处理函数
+        protected void OnNotifyProcess(string file, int index, int count)
+        {
+            if(NotifyProcessEvent != null)
+            {
+                NotifyProcessEventArgs e = new NotifyProcessEventArgs(file, index, count);
+                NotifyProcessEvent(this, e);
+            }
+        }
+        #endregion
+
         enum Quality
         {
             LOW,
@@ -117,10 +146,14 @@ namespace ResConverter
             if (srcWidth <= 0 || srcHeight <= 0 || destWidth <= 0 || destHeight <= 0)
                 return;
 
+            int cur = 0;
+
             // 以root为根目录载入所有图片并缩放
             string baseDir = config.path;
             foreach (ResFile file in config.files)
             {
+                OnNotifyProcess(file.path, ++cur, config.files.Count);
+
                 string inputFile = Path.GetFullPath(Path.Combine(baseDir, file.path));
                 string destFile = Path.GetFullPath(Path.Combine(destFolder, file.path));
 
