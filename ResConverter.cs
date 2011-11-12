@@ -96,7 +96,7 @@ namespace Wizard
 
     class ResConverter
     {
-        #region 事件响应：转换进度通知
+        #region 事件：转换进度通知
         public class NotifyProcessEventArgs : EventArgs
         {
             public readonly string file;

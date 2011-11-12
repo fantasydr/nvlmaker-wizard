@@ -8,9 +8,10 @@ using System.Windows.Forms;
 
 using System.IO;
 using System.Threading;
-using Tjs;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+
+using Tjs;
 
 //
 // app.ico == Any closet is a walk-in closet if you try hard enough..ico
@@ -287,13 +288,15 @@ namespace Wizard
             // 保存上一步的结果
             _curConfig.ProjectName = txtProjectName.Text;
             if (checkFolder.Checked)
+            {
                 _curConfig.ProjectFolder = txtFolderName.Text;
+            }
 
             // 根据当前配置生成报告
             StringWriter otuput = new StringWriter();
             
             btnOK.Enabled = _curConfig.IsReady(otuput);
-            ReportRefresh(otuput.ToString());
+            txtReport.Text = otuput.ToString();
 
             btnOK.BringToFront();
             btnOK.Show();
@@ -315,8 +318,14 @@ namespace Wizard
                 btnOK.Enabled = false;
                 btnExit.Enabled = false;
 
+                // 创建项目转换器，关联项目配置，并绑定UI显示事件
+                WizardConverter conv = new WizardConverter(_curConfig);
+                conv.NotifyProcessEvent += new ResConverter.NotifyProcessHandler(conv_NotifyProcessEvent);
+                conv.LoggingEvent += new WizardConverter.MessageHandler(conv_LoggingEvent);
+                conv.ErrorEvent += new WizardConverter.MessageHandler(conv_ErrorEvent);
+
                 // 启动一个线程来拷贝文件，防止UI死锁
-                Thread t = new Thread(new ThreadStart(BuildProject));
+                Thread t = new Thread(new ThreadStart(conv.Start));
                 t.Start();
                 while(!t.Join(100))
                 {
@@ -329,7 +338,7 @@ namespace Wizard
                 btnExit.Show();
                 btnExit.Enabled = true;
 
-                ReportAppend("项目建立完毕！");
+                ReportAppend("项目创建完毕！");
             }
             catch (System.Exception e)
             {
@@ -345,204 +354,7 @@ namespace Wizard
             LoggingEnd();
         }
 
-        // 根据配置创建目标项目
-        private void BuildProject()
-        {
-            // 从配置中读取需要的源大小和目标大小
-            int dw = _curConfig._width, dh = _curConfig._height;
-
-            // 先从基础模板目录拷贝文件到项目目录
-            string template = _curConfig.BaseTemplateFolder;
-            string project = _curConfig.ProjectFolder;
-
-            // 读取基础模板的配置
-            ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
-
-            int sw = baseInfo.width;
-            if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
-            int sh = baseInfo.height;
-            if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
-
-            ConvertFiles(template, sw, sh, project, dw, dh);
-
-            // 修正所有坐标，写入项目名称
-            AdjustSettings(sw, sh);
-
-            // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
-            if (_curConfig.ThemeFolder != template)
-            {
-                // 读取所选主题配置
-                ProjectProperty themeInfo = _curConfig.ReadThemeInfo();
-
-                sw = themeInfo.width;
-                if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
-                sh = themeInfo.height;
-                if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
-
-                // 主题的文件直接拷入数据目录
-                ConvertFiles(_curConfig.ThemeFolder, sw, sh, _curConfig.ProjectDataFolder, dw, dh);
-
-                // 修正所有坐标，写入项目名称
-                AdjustSettings(sw, sh);
-            }
-        }
-
-        // 工具函数：创建文件夹，并记录其中的文件
-        void CreateDir(string source, string dest, List<string> files)
-        {
-            if (!Directory.Exists(dest))
-            {
-                Directory.CreateDirectory(dest);
-            }
-
-            if (files != null)
-            {
-                string[] curFiles = Directory.GetFiles(source);
-                files.AddRange(curFiles);
-            }
-
-            string[] subDirs = Directory.GetDirectories(source);
-            if (subDirs.Length == 0)
-            {
-                // 木有找到任何子目录
-                return;
-            }
-
-            foreach (string dir in subDirs)
-            {
-                string name = Path.GetFileName(dir);
-                CreateDir(dir, Path.Combine(dest, name), files);
-            }
-        }
-
-        // 工具函数：拷贝并缩放文件
-        void ConvertFiles(string srcPath, int sw, int sh, string destPath, int dw, int dh)
-        {
-            // 源文件列表
-            List<string> srcFiles = new List<string>();
-            try
-            {
-                // 建立目录并获取文件列表
-                CreateDir(srcPath, destPath, srcFiles);
-
-                // 建立图片转换配置，用于记录需要转换的图片文件，其他文件则直接拷贝
-                ResConfig resource = new ResConfig();
-                resource.path = srcPath;
-                resource.name = WizardConfig.NAME_DEFAULT_THEME;
-
-                // 遍历所有文件
-                int cutLen = srcPath.Length;
-                foreach (string srcfile in srcFiles)
-                {
-                    // 截掉模板目录以径获取相对路径
-                    string relFile = srcfile.Substring(cutLen + 1);
-
-                    // 取得扩展名
-                    string ext = Path.GetExtension(relFile).ToLower();
-
-                    if ( // 宽高如果和源文件相同那就不用转换了
-                         (sw != dw || sh != dh) &&
-                         // 忽略某些图片
-                         !WizardConfig.IgnorePicture(relFile) &&
-                         // 只转换这些扩展名对应的文件
-                         (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") )
-                    {
-                        // 是图片则添加到转换器中
-                        resource.files.Add(new ResFile(relFile));
-                    }
-                    else
-                    {
-                        // 直接拷贝
-                        Logging(string.Format("拷贝{0}", relFile));
-                        File.Copy(srcfile, Path.Combine(destPath, relFile), true);
-                    }
-                }
-
-                Logging("图片转换中……");
-
-                if (resource.files.Count > 0)
-                {
-                    // 创建一个图片转换器并开始转换
-                    ResConverter conv = new ResConverter();
-                    conv.NotifyProcessEvent += new ResConverter.NotifyProcessHandler(conv_NotifyProcessEvent);
-                    conv.Start(resource, destPath, sw, sh, dw, dh);
-                }
-
-            }
-            catch (System.Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
-        }
-
-        // 工具函数：修正目标项目文件夹中的配置
-        void AdjustSettings(int sw, int sh)
-        {
-            string dataPath = _curConfig.ProjectDataFolder;
-            int dh = _curConfig._height;
-            int dw = _curConfig._width;
-            string title = _curConfig.ProjectName;
-
-            try
-            {
-                WizardConfig.ModifySetting(dataPath, title, sw, sh, dh, dw);
-            }
-            catch (System.Exception e)
-            {
-                ReportAppend("修改setting.tjs失败:" + e.Message);
-            }
-
-            try
-            {
-                WizardConfig.ModifyConfig(dataPath, title, sw, sh, dh, dw);
-            }
-            catch (System.Exception e)
-            {
-                ReportAppend("修改Config.tjs失败:" + e.Message);
-            }
-            
-            // 检查是否需要转换
-            if (sw != dw || sh != dh)
-            {
-                try
-                {
-                    WizardConfig.ModifyLayout(dataPath, sw, sh, dh, dw);
-                }
-                catch (System.Exception e)
-                {
-                    ReportAppend("修改界面布局文件失败:" + e.Message);
-                }
-            }
-        }
-
-        // 读了主题目录中所有的目录和根目录下的问卷
-        private void LoadThemeFiles()
-        {
-            // 主题的Data目录
-            string theme = _curConfig.ThemeFolder;
-
-            try
-            {
-                lstScale.BeginUpdate();
-                lstScale.Items.Clear();
-
-                // 读取主题目录下的文件列表
-                string[] subDirs = Directory.GetDirectories(theme);
-                foreach (string dir in subDirs)
-                {
-                    lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
-                }
-                string[] files = Directory.GetFiles(theme);
-                foreach (string file in files)
-                {
-                    lstScale.Items.Add(Path.GetFileName(file));
-                }
-                lstScale.EndUpdate();
-            }
-            catch (System.Exception e) { }
-        }
-
-        #region Logging函数
+        // 简单的Logging方法，直接打印在标题栏
         string _titleSaved = null;
         void LoggingBegin()
         {
@@ -570,22 +382,41 @@ namespace Wizard
                 this.Text = string.Format("{0}: {1}", _titleSaved, msg);
             }));
         }
-        #endregion
 
-        void ReportRefresh(string report)
-        {
-            this.Invoke(new ThreadStart(delegate()
-            {
-                txtReport.Text = report;
-            }));
-        }
-
+        // 直接在文本控件中显示一些消息
         void ReportAppend(string report)
         {
             this.BeginInvoke(new ThreadStart(delegate()
             {
                 txtReport.Text += report + Environment.NewLine;
             }));
+        }
+
+        // 读了主题目录中所有的目录和根目录下的文件
+        private void LoadThemeFiles()
+        {
+            // 主题的Data目录
+            string theme = _curConfig.ThemeFolder;
+
+            try
+            {
+                lstScale.BeginUpdate();
+                lstScale.Items.Clear();
+
+                // 读取主题目录下的文件列表
+                string[] subDirs = Directory.GetDirectories(theme);
+                foreach (string dir in subDirs)
+                {
+                    lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
+                }
+                string[] files = Directory.GetFiles(theme);
+                foreach (string file in files)
+                {
+                    lstScale.Items.Add(Path.GetFileName(file));
+                }
+                lstScale.EndUpdate();
+            }
+            catch (System.Exception e) { }
         }
 
         // 标记是否在操作下拉列表，防止和数字选择控件相互调用
@@ -649,7 +480,7 @@ namespace Wizard
         {
             if(!btnExit.Enabled)
             {
-                MessageBox.Show("正在创建项目，请稍候……");
+                MessageBox.Show("正在创建项目，请稍候……", this.Text);
                 e.Cancel = true;
             }
         }
@@ -657,6 +488,16 @@ namespace Wizard
         void conv_NotifyProcessEvent(ResConverter sender, ResConverter.NotifyProcessEventArgs e)
         {
             Logging(string.Format("({0}/{1}){2} 转换中……", e.index, e.count, e.file));
+        }
+
+        void conv_ErrorEvent(WizardConverter sender, WizardConverter.MessageEventArgs e)
+        {
+            ReportAppend(e.msg);
+        }
+
+        void conv_LoggingEvent(WizardConverter sender, WizardConverter.MessageEventArgs e)
+        {
+            Logging(e.msg);
         }
     }
 }

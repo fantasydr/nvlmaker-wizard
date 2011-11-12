@@ -77,9 +77,9 @@ namespace Wizard
             {
                 // 读取标题
                 string ret = null;
-                if (_setting != null)
+                if (setting != null)
                 {
-                    ret = _setting.GetString("title");
+                    ret = setting.GetString("title");
                 }
                 return ret == null ? string.Empty : ret;
             }
@@ -91,9 +91,9 @@ namespace Wizard
             {
                 // 读取预设宽度
                 double ret = double.NaN;
-                if (_setting != null)
+                if (setting != null)
                 {
-                    ret = _setting.GetNumber("width");
+                    ret = setting.GetNumber("width");
                 }
                 return double.IsNaN(ret) ? 0 : (int)ret;
             }
@@ -105,9 +105,9 @@ namespace Wizard
             {
                 // 读取预设高度
                 double ret = double.NaN;
-                if (_setting != null)
+                if (setting != null)
                 {
-                    ret = _setting.GetNumber("height");
+                    ret = setting.GetNumber("height");
                 }
                 return double.IsNaN(ret) ? 0 : (int)ret;
             }
@@ -119,9 +119,9 @@ namespace Wizard
             {
                 // 读取缩略图大小
                 double ret = double.NaN;
-                if (_setting != null)
+                if (setting != null)
                 {
-                    TjsString str = _setting.GetValue("savedata/thumbnailwidth") as TjsString;
+                    TjsString str = setting.GetValue("savedata/thumbnailwidth") as TjsString;
                     if (str != null)
                     {
                         double.TryParse(str.val, out ret);
@@ -131,25 +131,25 @@ namespace Wizard
             }
         }
 
-        public TjsDict _setting = null;
+        public TjsDict setting = null;
 
         public void LoadSetting(string file)
         {
-            _setting = null;
+            setting = null;
 
             if (File.Exists(file))
             {
                 using (StreamReader r = new StreamReader(file))
                 {
                     TjsParser parser = new TjsParser();
-                    TjsDict setting = parser.Parse(r) as TjsDict;
-                    _setting = setting;
+                    setting = parser.Parse(r) as TjsDict;
                 }
             }
         }
     }
 
-    class ConvertHelper
+    // 封装一些辅助的方法用于转换数据
+    class TjsHelper
     {
         public static double ScaleInteger(TjsDict dict, string name, double scale)
         {
@@ -273,8 +273,8 @@ namespace Wizard
             p = Point.Empty;
             return false;
         }
-
     }
+
     // 项目向导配置对象
     class WizardConfig
     {
@@ -344,6 +344,7 @@ namespace Wizard
             }
         }
 
+        // 是否选择了默认主题
         public bool IsDefaultTheme
         {
             get
@@ -467,7 +468,7 @@ namespace Wizard
                 string path = this.BaseFolder;
                 if (string.IsNullOrEmpty(_baseFolder) || !Directory.Exists(path))
                 {
-                    if (output != null) output.WriteLine("软件根目录不存在。");
+                    if (output != null) output.WriteLine("错误：软件根目录不存在。");
                     return false;
                 }
 
@@ -604,7 +605,7 @@ namespace Wizard
         public ProjectProperty ReadBaseTemplateInfo()
         {
             // 如果选的是默认的主题，则返回主题属性
-            if(this.BaseTemplateFolder == this.ThemeFolder)
+            if(this.IsDefaultTheme)
             {
                 return this.ReadThemeInfo();
             }
@@ -622,25 +623,209 @@ namespace Wizard
             }
             return info;
         }
+    }
+
+    // 根据项目配置转换项目文件
+    class WizardConverter : ResConverter
+    {
+        #region 事件：Logging及Report消息通知
+        public class MessageEventArgs : EventArgs
+        {
+            public readonly string msg;
+            public MessageEventArgs(string msg)
+            {
+                this.msg = msg;
+            }
+        }
+        // 消息通知响应函数
+        public delegate void MessageHandler(WizardConverter sender, MessageEventArgs e);
+        
+        // Logging事件
+        public event MessageHandler LoggingEvent;
+        protected void OnLogging(string msg)
+        {
+            if (LoggingEvent != null)
+            {
+                LoggingEvent(this, new MessageEventArgs(msg));
+            }
+        }
+
+        // 错误消息通知事件
+        public event MessageHandler ErrorEvent;
+        protected void OnError(string msg)
+        {
+            if (ErrorEvent != null)
+            {
+                ErrorEvent(this, new MessageEventArgs(msg));
+            }
+        }
+        #endregion
+
+        WizardConfig _config;
+
+        public WizardConverter(WizardConfig config)
+        {
+            _config = config;
+        }
+
+        // 根据配置创建目标项目
+        public void Start()
+        {
+            // 从配置中读取需要的源大小和目标大小
+            int dw = _config._width, dh = _config._height;
+
+            // 先从基础模板目录拷贝文件到项目目录
+            string template = _config.BaseTemplateFolder;
+            string project = _config.ProjectFolder;
+
+            // 读取基础模板的配置
+            ProjectProperty baseInfo = _config.ReadBaseTemplateInfo();
+
+            int sw = baseInfo.width;
+            if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
+            int sh = baseInfo.height;
+            if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
+
+            ConvertFiles(template, sw, sh, project, dw, dh);
+
+            // 修正所有坐标，写入项目名称
+            AdjustSettings(sw, sh);
+
+            // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
+            if (_config.ThemeFolder != template)
+            {
+                // 读取所选主题配置
+                ProjectProperty themeInfo = _config.ReadThemeInfo();
+
+                sw = themeInfo.width;
+                if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
+                sh = themeInfo.height;
+                if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
+
+                // 主题的文件直接拷入数据目录
+                ConvertFiles(_config.ThemeFolder, sw, sh, _config.ProjectDataFolder, dw, dh);
+
+                // 修正所有坐标，写入项目名称
+                AdjustSettings(sw, sh);
+            }
+        }
+
+        // 拷贝并缩放文件
+        void ConvertFiles(string srcPath, int sw, int sh, string destPath, int dw, int dh)
+        {
+            // 源文件列表
+            List<string> srcFiles = new List<string>();
+            try
+            {
+                // 建立目录并获取文件列表
+                CreateDir(srcPath, destPath, srcFiles);
+
+                // 建立图片转换配置，用于记录需要转换的图片文件，其他文件则直接拷贝
+                ResConfig resource = new ResConfig();
+                resource.path = srcPath;
+                resource.name = WizardConfig.NAME_DEFAULT_THEME;
+
+                // 遍历所有文件
+                int cutLen = srcPath.Length;
+                foreach (string srcfile in srcFiles)
+                {
+                    // 截掉模板目录以径获取相对路径
+                    string relFile = srcfile.Substring(cutLen + 1);
+
+                    // 取得扩展名
+                    string ext = Path.GetExtension(relFile).ToLower();
+
+                    if ( // 宽高如果和源文件相同那就不用转换了
+                         (sw != dw || sh != dh) &&
+                        // 忽略某些图片
+                         !WizardConfig.IgnorePicture(relFile) &&
+                        // 只转换这些扩展名对应的文件
+                         (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp"))
+                    {
+                        // 是图片则添加到转换器中
+                        resource.files.Add(new ResFile(relFile));
+                    }
+                    else
+                    {
+                        // 直接拷贝
+                        OnLogging(string.Format("拷贝{0}", relFile));
+                        File.Copy(srcfile, Path.Combine(destPath, relFile), true);
+                    }
+                }
+
+                OnLogging("图片转换中……");
+
+                if (resource.files.Count > 0)
+                {
+                    // 调用资源转换器方法，并开始转换
+                    Start(resource, destPath, sw, sh, dw, dh);
+                }
+
+            }
+            catch (System.Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+        }
+
+        // 修正目标项目文件夹中的配置
+        void AdjustSettings(int sw, int sh)
+        {
+            string dataPath = _config.ProjectDataFolder;
+            int dh = _config._height;
+            int dw = _config._width;
+            string title = _config.ProjectName;
+
+            try
+            {
+                ModifySetting(dataPath, title, sw, sh, dh, dw);
+            }
+            catch (System.Exception e)
+            {
+                OnError("修改setting.tjs失败:" + e.Message);
+            }
+
+            try
+            {
+                ModifyConfig(dataPath, title, sw, sh, dh, dw);
+            }
+            catch (System.Exception e)
+            {
+                OnError("修改Config.tjs失败:" + e.Message);
+            }
+
+            // 检查是否需要转换
+            if (sw != dw || sh != dh)
+            {
+                try
+                {
+                    ModifyLayout(dataPath, sw, sh, dh, dw);
+                }
+                catch (System.Exception e)
+                {
+                    OnError("修改界面布局文件失败:" + e.Message);
+                }
+            }
+        }
 
         // 修改字典文件
-        public static void ModifyDict(TjsDict dict, int sw, int sh, int dw, int dh)
+        static void ModifyDict(TjsDict dict, int sw, int sh, int dw, int dh)
         {
             double scaleX = (double)dw / sw;
             double scaleY = (double)dh / sh;
 
-            ConvertHelper.ScaleInteger(dict, "left", scaleX);
-            ConvertHelper.ScaleInteger(dict, "x", scaleX);
-            ConvertHelper.ScaleInteger(dict, "marginr", scaleX);
-            ConvertHelper.ScaleInteger(dict, "marginl", scaleX);
+            TjsHelper.ScaleInteger(dict, "left", scaleX);
+            TjsHelper.ScaleInteger(dict, "x", scaleX);
+            TjsHelper.ScaleInteger(dict, "marginr", scaleX);
+            TjsHelper.ScaleInteger(dict, "marginl", scaleX);
 
-            ConvertHelper.ScaleInteger(dict, "top", scaleY);
-            ConvertHelper.ScaleInteger(dict, "y", scaleY);
-            ConvertHelper.ScaleInteger(dict, "margint", scaleY);
-            ConvertHelper.ScaleInteger(dict, "marginb", scaleY);
+            TjsHelper.ScaleInteger(dict, "top", scaleY);
+            TjsHelper.ScaleInteger(dict, "y", scaleY);
+            TjsHelper.ScaleInteger(dict, "margint", scaleY);
+            TjsHelper.ScaleInteger(dict, "marginb", scaleY);
 
             // 修改locate数组
-            ConvertHelper.ScalePosArray(dict, "locate", scaleX, scaleY);
+            TjsHelper.ScalePosArray(dict, "locate", scaleX, scaleY);
 
             foreach (KeyValuePair<string, TjsValue> kv in dict.val)
             {
@@ -653,16 +838,16 @@ namespace Wizard
         }
 
         // 修改UI布局文件
-        public static void ModifyLayout(string dataPath, int sw, int sh, int dh, int dw)
+        static void ModifyLayout(string dataPath, int sw, int sh, int dh, int dw)
         {
             // 更新layout
-            string[] layouts = Directory.GetFiles(dataPath, UI_LAYOUT);
+            string[] layouts = Directory.GetFiles(dataPath, WizardConfig.UI_LAYOUT);
             foreach (string layout in layouts)
             {
-                TjsParser parser = new TjsParser();
                 TjsDict setting = null;
                 using (StreamReader r = new StreamReader(layout))
                 {
+                    TjsParser parser = new TjsParser();
                     setting = parser.Parse(r) as TjsDict;
                 }
 
@@ -675,9 +860,9 @@ namespace Wizard
                     {
                         double scaleX = (double)dw / sw;
                         double scaleY = (double)dh / sh;
-                        ConvertHelper.ScaleButton(setting, "back", scaleX, scaleY);
-                        ConvertHelper.ScaleButton(setting, "up", scaleX, scaleY);
-                        ConvertHelper.ScaleButton(setting, "down", scaleX, scaleY);
+                        TjsHelper.ScaleButton(setting, "back", scaleX, scaleY);
+                        TjsHelper.ScaleButton(setting, "up", scaleX, scaleY);
+                        TjsHelper.ScaleButton(setting, "down", scaleX, scaleY);
                     }
                 }
 
@@ -689,10 +874,10 @@ namespace Wizard
         }
 
         // 修改config.tjs
-        public static void ModifyConfig(string dataPath, string title, int sw, int sh, int dh, int dw)
+        static void ModifyConfig(string dataPath, string title, int sw, int sh, int dh, int dw)
         {
             // 更新config
-            string configFile = Path.Combine(dataPath, UI_CONFIG);
+            string configFile = Path.Combine(dataPath, WizardConfig.UI_CONFIG);
             if (File.Exists(configFile))
             {
                 Regex regTitle = new Regex(@"\s*;\s*System.title\s*=");
@@ -721,7 +906,7 @@ namespace Wizard
                         else if (regThumb.IsMatch(line))
                         {
                             // 临时创建一个属性对象用于读取setting
-                            string settingFile = Path.Combine(dataPath, UI_SETTING);
+                            string settingFile = Path.Combine(dataPath, WizardConfig.UI_SETTING);
                             ProjectProperty info = new ProjectProperty();
                             info.LoadSetting(settingFile);
 
@@ -747,15 +932,15 @@ namespace Wizard
         }
 
         // 修改setting.tjs
-        public static void ModifySetting(string dataPath, string title, int sw, int sh, int dh, int dw)
+        static void ModifySetting(string dataPath, string title, int sw, int sh, int dh, int dw)
         {
             // 更新setting
-            string settingFile = Path.Combine(dataPath, UI_SETTING);
+            string settingFile = Path.Combine(dataPath, WizardConfig.UI_SETTING);
             
             // 临时创建一个属性对象用于读取setting
             ProjectProperty info = new ProjectProperty();
             info.LoadSetting(settingFile);
-            TjsDict setting = info._setting;
+            TjsDict setting = info.setting;
 
             if (setting != null)
             {
@@ -775,6 +960,34 @@ namespace Wizard
                 {
                     w.Write(setting.ToString());
                 }
+            }
+        }
+
+        // 工具函数：创建文件夹，并记录其中的文件
+        static void CreateDir(string source, string dest, List<string> files)
+        {
+            if (!Directory.Exists(dest))
+            {
+                Directory.CreateDirectory(dest);
+            }
+
+            if (files != null)
+            {
+                string[] curFiles = Directory.GetFiles(source);
+                files.AddRange(curFiles);
+            }
+
+            string[] subDirs = Directory.GetDirectories(source);
+            if (subDirs.Length == 0)
+            {
+                // 木有找到任何子目录
+                return;
+            }
+
+            foreach (string dir in subDirs)
+            {
+                string name = Path.GetFileName(dir);
+                CreateDir(dir, Path.Combine(dest, name), files);
             }
         }
     }
