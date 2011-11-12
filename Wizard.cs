@@ -12,6 +12,11 @@ using Tjs;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
+//
+// app.ico == Any closet is a walk-in closet if you try hard enough..ico
+// Based on icons by Paul Davey aka Mattahan. All rights reserved.
+// 
+
 namespace ResConverter
 {
     public partial class Wizard : Form

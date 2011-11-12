@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ResConverter")]
+[assembly: AssemblyTitle("Project Wizard for NVLMaker")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("mega-zone")]
-[assembly: AssemblyProduct("ResConverter")]
-[assembly: AssemblyCopyright("Copyright © mega-zone 2011")]
+[assembly: AssemblyProduct("NVLMaker")]
+[assembly: AssemblyCopyright("Copyright © mega-zone 2011, Based on icons by Paul Davey aka Mattahan. All rights reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
