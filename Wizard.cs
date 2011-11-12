@@ -17,7 +17,7 @@ using System.Text.RegularExpressions;
 // Based on icons by Paul Davey aka Mattahan. All rights reserved.
 // 
 
-namespace ResConverter
+namespace Wizard
 {
     public partial class Wizard : Form
     {

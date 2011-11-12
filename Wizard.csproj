@@ -7,8 +7,8 @@
     <ProjectGuid>{F0B1E366-8F0A-4494-9574-E53F8CCA949A}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>ResConverter</RootNamespace>
-    <AssemblyName>ProjectWizard</AssemblyName>
+    <RootNamespace>Wizard</RootNamespace>
+    <AssemblyName>Wizard</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -59,6 +59,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

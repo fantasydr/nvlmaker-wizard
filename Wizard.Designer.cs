@@ -1,4 +1,4 @@
-namespace ResConverter
+namespace Wizard
 {
     partial class Wizard
     {

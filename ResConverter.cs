@@ -6,7 +6,7 @@ using System.Xml;
 using System.IO;
 using System.Xml.Serialization;
 
-namespace ResConverter
+namespace Wizard
 {
     public class ResFile
     {

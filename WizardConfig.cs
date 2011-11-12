@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Drawing;
 
-namespace ResConverter
+namespace Wizard
 {
     // 分辨率设置对象
     class Resolution
