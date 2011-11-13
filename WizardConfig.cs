@@ -139,11 +139,7 @@ namespace Wizard
 
             if (File.Exists(file))
             {
-                using (StreamReader r = new StreamReader(file))
-                {
-                    TjsParser parser = new TjsParser();
-                    setting = parser.Parse(r) as TjsDict;
-                }
+                setting = TjsValue.Load(file) as TjsDict;
             }
         }
     }
@@ -850,12 +846,7 @@ namespace Wizard
             string[] layouts = Directory.GetFiles(dataPath, WizardConfig.UI_LAYOUT);
             foreach (string layout in layouts)
             {
-                TjsDict setting = null;
-                using (StreamReader r = new StreamReader(layout))
-                {
-                    TjsParser parser = new TjsParser();
-                    setting = parser.Parse(r) as TjsDict;
-                }
+                TjsDict setting = TjsValue.Load(layout) as TjsDict;
 
                 if (setting != null)
                 {
@@ -872,10 +863,7 @@ namespace Wizard
                     }
                 }
 
-                using (StreamWriter w = new StreamWriter(layout, false, Encoding.Unicode))
-                {
-                    w.Write(setting.ToString());
-                }
+                setting.Save(layout, Encoding.Unicode);
             }
         }
 
@@ -962,10 +950,7 @@ namespace Wizard
                     setting.SetValue("savedata/thumbnailwidth", new TjsString(tw.ToString()));
                 }
 
-                using (StreamWriter w = new StreamWriter(settingFile, false, Encoding.Unicode))
-                {
-                    w.Write(setting.ToString());
-                }
+                setting.Save(settingFile, Encoding.Unicode);
             }
         }
 

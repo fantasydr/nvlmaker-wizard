@@ -35,6 +35,23 @@ namespace Tjs
         // Ëõ½ø¶ÑÕ»
         protected static string _indentStack = string.Empty;
         #endregion
+
+        public static TjsValue Load(string file)
+        {
+            using (StreamReader r = new StreamReader(file))
+            {
+                TjsParser parser = new TjsParser();
+                return parser.Parse(r);
+            }
+        }
+
+        public void Save(string file, Encoding encode)
+        {
+            using (StreamWriter w = new StreamWriter(file, false, encode))
+            {
+                w.Write(this.ToString());
+            }
+        }
     }
 
     // ¿ÕÖµ
