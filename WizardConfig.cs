@@ -317,7 +317,7 @@ namespace Wizard
         // 是否处在项目编辑模式
         private bool _modifyproject = false;
 
-        // 储存上次读取的主体属性，避免多次读取
+        // 储存上次读取的属性，避免多次读取。各种Bug都是这货搞的。
         private ProjectProperty _info = null;
         #endregion
 
@@ -480,7 +480,15 @@ namespace Wizard
             set
             {
                 // 处理下，保证不为空指针或空白字串
-                _projectName = (value == null ? string.Empty : value.Trim());
+                string projectName = (value == null ? string.Empty : value.Trim());
+
+                if(_projectName != projectName)
+                {
+                    _projectName = projectName;
+                    
+                    // 需要更新info信息
+                    if(this.IsModifyProject) _info = null;
+                }
             }
         }
 

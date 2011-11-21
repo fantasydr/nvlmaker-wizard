@@ -446,7 +446,7 @@ namespace Wizard
                     string name = Path.GetFileName(theme);
                     
                     // 忽略默认模板主题名称
-                    if(name.ToLower() == WizardConfig.PROJECT_DEFAULT_THEME)
+                    if(name.StartsWith(".") || name.ToLower() == WizardConfig.PROJECT_DEFAULT_THEME)
                     {
                         continue;
                     }
