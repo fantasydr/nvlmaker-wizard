@@ -30,8 +30,12 @@ namespace Wizard
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Wizard));
             this.gbStep1 = new System.Windows.Forms.GroupBox();
-            this.txtTemplate = new System.Windows.Forms.TextBox();
+            this.tabSelect = new System.Windows.Forms.TabControl();
+            this.tabTemplate = new System.Windows.Forms.TabPage();
             this.lstTemplate = new System.Windows.Forms.ListBox();
+            this.tabProject = new System.Windows.Forms.TabPage();
+            this.lstProject = new System.Windows.Forms.ListBox();
+            this.txtReadme = new System.Windows.Forms.TextBox();
             this.gbStep2 = new System.Windows.Forms.GroupBox();
             this.lstScale = new System.Windows.Forms.ListBox();
             this.txtResolution = new System.Windows.Forms.TextBox();
@@ -53,6 +57,9 @@ namespace Wizard
             this.btnPrev = new System.Windows.Forms.Button();
             this.btnNext = new System.Windows.Forms.Button();
             this.gbStep1.SuspendLayout();
+            this.tabSelect.SuspendLayout();
+            this.tabTemplate.SuspendLayout();
+            this.tabProject.SuspendLayout();
             this.gbStep2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numWidth)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numHeight)).BeginInit();
@@ -62,35 +69,82 @@ namespace Wizard
             // 
             // gbStep1
             // 
-            this.gbStep1.Controls.Add(this.txtTemplate);
-            this.gbStep1.Controls.Add(this.lstTemplate);
+            this.gbStep1.Controls.Add(this.tabSelect);
+            this.gbStep1.Controls.Add(this.txtReadme);
             this.gbStep1.Location = new System.Drawing.Point(12, 12);
             this.gbStep1.Name = "gbStep1";
             this.gbStep1.Size = new System.Drawing.Size(370, 216);
             this.gbStep1.TabIndex = 6;
             this.gbStep1.TabStop = false;
-            this.gbStep1.Text = "1.选择主题";
+            this.gbStep1.Text = "1.选择主题或项目";
             // 
-            // txtTemplate
+            // tabSelect
             // 
-            this.txtTemplate.Location = new System.Drawing.Point(122, 19);
-            this.txtTemplate.Multiline = true;
-            this.txtTemplate.Name = "txtTemplate";
-            this.txtTemplate.ReadOnly = true;
-            this.txtTemplate.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.txtTemplate.Size = new System.Drawing.Size(233, 185);
-            this.txtTemplate.TabIndex = 15;
-            this.txtTemplate.WordWrap = false;
+            this.tabSelect.Controls.Add(this.tabTemplate);
+            this.tabSelect.Controls.Add(this.tabProject);
+            this.tabSelect.Location = new System.Drawing.Point(5, 17);
+            this.tabSelect.Name = "tabSelect";
+            this.tabSelect.SelectedIndex = 0;
+            this.tabSelect.Size = new System.Drawing.Size(110, 187);
+            this.tabSelect.TabIndex = 16;
+            this.tabSelect.Selected += new System.Windows.Forms.TabControlEventHandler(this.tabSelect_Selected);
+            // 
+            // tabTemplate
+            // 
+            this.tabTemplate.Controls.Add(this.lstTemplate);
+            this.tabTemplate.Location = new System.Drawing.Point(4, 22);
+            this.tabTemplate.Name = "tabTemplate";
+            this.tabTemplate.Padding = new System.Windows.Forms.Padding(3);
+            this.tabTemplate.Size = new System.Drawing.Size(102, 161);
+            this.tabTemplate.TabIndex = 0;
+            this.tabTemplate.Text = "主题";
+            this.tabTemplate.UseVisualStyleBackColor = true;
             // 
             // lstTemplate
             // 
+            this.lstTemplate.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.lstTemplate.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lstTemplate.FormattingEnabled = true;
             this.lstTemplate.ItemHeight = 12;
-            this.lstTemplate.Location = new System.Drawing.Point(16, 20);
+            this.lstTemplate.Location = new System.Drawing.Point(3, 3);
             this.lstTemplate.Name = "lstTemplate";
-            this.lstTemplate.Size = new System.Drawing.Size(100, 184);
-            this.lstTemplate.TabIndex = 3;
+            this.lstTemplate.Size = new System.Drawing.Size(96, 144);
+            this.lstTemplate.TabIndex = 4;
             this.lstTemplate.SelectedIndexChanged += new System.EventHandler(this.lstTemplate_SelectedIndexChanged);
+            // 
+            // tabProject
+            // 
+            this.tabProject.Controls.Add(this.lstProject);
+            this.tabProject.Location = new System.Drawing.Point(4, 22);
+            this.tabProject.Name = "tabProject";
+            this.tabProject.Padding = new System.Windows.Forms.Padding(3);
+            this.tabProject.Size = new System.Drawing.Size(102, 161);
+            this.tabProject.TabIndex = 1;
+            this.tabProject.Text = "项目";
+            this.tabProject.UseVisualStyleBackColor = true;
+            // 
+            // lstProject
+            // 
+            this.lstProject.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.lstProject.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lstProject.FormattingEnabled = true;
+            this.lstProject.ItemHeight = 12;
+            this.lstProject.Location = new System.Drawing.Point(3, 3);
+            this.lstProject.Name = "lstProject";
+            this.lstProject.Size = new System.Drawing.Size(96, 144);
+            this.lstProject.TabIndex = 5;
+            this.lstProject.SelectedIndexChanged += new System.EventHandler(this.lstProject_SelectedIndexChanged);
+            // 
+            // txtReadme
+            // 
+            this.txtReadme.Location = new System.Drawing.Point(117, 19);
+            this.txtReadme.Multiline = true;
+            this.txtReadme.Name = "txtReadme";
+            this.txtReadme.ReadOnly = true;
+            this.txtReadme.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            this.txtReadme.Size = new System.Drawing.Size(238, 185);
+            this.txtReadme.TabIndex = 15;
+            this.txtReadme.WordWrap = false;
             // 
             // gbStep2
             // 
@@ -106,7 +160,7 @@ namespace Wizard
             this.gbStep2.Size = new System.Drawing.Size(370, 216);
             this.gbStep2.TabIndex = 8;
             this.gbStep2.TabStop = false;
-            this.gbStep2.Text = "2.设置分辨率";
+            this.gbStep2.Text = "2.设定分辨率";
             // 
             // lstScale
             // 
@@ -261,7 +315,7 @@ namespace Wizard
             this.gbStep4.Size = new System.Drawing.Size(370, 216);
             this.gbStep4.TabIndex = 11;
             this.gbStep4.TabStop = false;
-            this.gbStep4.Text = "4.生成项目";
+            this.gbStep4.Text = "4.文件转换";
             // 
             // txtReport
             // 
@@ -326,10 +380,13 @@ namespace Wizard
             this.MinimumSize = new System.Drawing.Size(400, 300);
             this.Name = "Wizard";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "项目创建向导";
+            this.Text = "项目管理向导";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Wizard_FormClosing);
             this.gbStep1.ResumeLayout(false);
             this.gbStep1.PerformLayout();
+            this.tabSelect.ResumeLayout(false);
+            this.tabTemplate.ResumeLayout(false);
+            this.tabProject.ResumeLayout(false);
             this.gbStep2.ResumeLayout(false);
             this.gbStep2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numWidth)).EndInit();
@@ -345,7 +402,6 @@ namespace Wizard
         #endregion
 
         private System.Windows.Forms.GroupBox gbStep1;
-        private System.Windows.Forms.ListBox lstTemplate;
         private System.Windows.Forms.GroupBox gbStep2;
         private System.Windows.Forms.TextBox txtResolution;
         private System.Windows.Forms.Label label2;
@@ -358,7 +414,7 @@ namespace Wizard
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.CheckBox checkFolder;
         private System.Windows.Forms.TextBox txtFolderName;
-        private System.Windows.Forms.TextBox txtTemplate;
+        private System.Windows.Forms.TextBox txtReadme;
         private System.Windows.Forms.ListBox lstScale;
         private System.Windows.Forms.Button btnOK;
         private System.Windows.Forms.Button btnExit;
@@ -367,6 +423,11 @@ namespace Wizard
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.Button btnPrev;
         private System.Windows.Forms.Button btnNext;
+        private System.Windows.Forms.TabControl tabSelect;
+        private System.Windows.Forms.TabPage tabTemplate;
+        private System.Windows.Forms.ListBox lstTemplate;
+        private System.Windows.Forms.TabPage tabProject;
+        private System.Windows.Forms.ListBox lstProject;
     }
 }
 

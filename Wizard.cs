@@ -34,7 +34,7 @@ namespace Wizard
         GroupBox[] _stepGroups = null;
 
         // 步骤处理函数指针
-        delegate void StepHandler();
+        delegate bool StepHandler();
         StepHandler[] _stepHandlers;
 
         // 获取/设置当前步骤
@@ -70,18 +70,22 @@ namespace Wizard
                 _stepGroups[_curStep].BringToFront();
                 _stepGroups[_curStep].Enabled = true;
 
-                // 控制按钮显示
-                btnNext.Enabled = _curStep < _stepGroups.Length - 1;
-                btnPrev.Enabled = _curStep > 0;
-                if (!btnPrev.Enabled) btnNext.Focus();
-                if (btnNext.Enabled) btnNext.BringToFront();
+                btnOK.Hide();
+                btnExit.Hide();
 
+                bool canNext = false;
                 // 按照当前步骤调用对应的处理函数
                 if (_curStep < _stepHandlers.Length)
                 {
                     StepHandler handler = _stepHandlers[_curStep];
-                    handler();
+                    canNext = handler();
                 }
+
+                // 控制按钮显示
+                btnNext.Enabled = !canNext ? false : _curStep < _stepGroups.Length - 1;
+                btnPrev.Enabled = _curStep > 0;
+                if (!btnPrev.Enabled) btnNext.Focus();
+                if (btnNext.Enabled) btnNext.BringToFront();
             }
         }
 
@@ -121,9 +125,6 @@ namespace Wizard
             };
 
             this.Step = 0;
-
-            // 读取默认模板信息
-            LoadProjectProperty();
 
             this.ResumeLayout();
         }
@@ -203,79 +204,105 @@ namespace Wizard
 
         private void btnOK_Click(object sender, EventArgs e)
         {
-            // 开始建立项目
-            if(MessageBox.Show("开始创建项目？", this.Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
+            // 开始操作
+            if(MessageBox.Show("开始" + CurOP + "项目？", this.Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 OnBuild();
             }
         }
-        
-        void OnStep1()
+
+        bool OnStep1()
         {
-            // 刷新主题目录列表
-            int selected = 0;
-            lstTemplate.BeginUpdate();
-            lstTemplate.Items.Clear();
-            lstTemplate.Items.Add(WizardConfig.NAME_DEFAULT_THEME);
-
-            try
+            if(_curConfig.IsModifyProject)
             {
-                string lastSelect = _curConfig.ThemeName.ToLower();
-                string root = _curConfig.BaseFolder;
-                string[] themes = Directory.GetDirectories(root + WizardConfig.THEME_FOLDER);
-                foreach (string theme in themes)
-                {
-                    // 只留目录名
-                    string name = Path.GetFileName(theme);
-                    lstTemplate.Items.Add(name);
+                // 刷新项目目录列表
+                lstProject.BeginUpdate();
+                lstProject.Items.Clear();
+                
+                // 读取所有项目目录
+                string projectRoot = _curConfig.BaseFolder + WizardConfig.PROJECT_FOLDER;
+                int lastSelected = ShowNameList(projectRoot, lstProject, _curConfig.ProjectName);
 
-                    // 匹配第一个目录名相同的主题作为选中项，返回的时候保持选项正确
-                    if (selected == 0 && lastSelect == name)
-                    {
-                        selected = lstTemplate.Items.Count - 1;
-                    }
-                }
+                // 恢复上次选中的结果
+                if (lastSelected < 0 && lstProject.Items.Count > 0) lastSelected = 0;
+                lstProject.SelectedIndex = lastSelected;
+
+                lstProject.EndUpdate();
+
+                return lstProject.Items.Count > 0;
             }
-            catch (System.Exception e)
+            else
             {
-            	// 出错了就不管啦
-            }
+                // 刷新主题目录列表
+                lstTemplate.BeginUpdate();
+                lstTemplate.Items.Clear();
+                
+                // 把默认主题添加到第一项
+                lstTemplate.Items.Add(WizardConfig.NAME_DEFAULT_THEME);
 
-            lstTemplate.SelectedIndex = selected;
-            lstTemplate.EndUpdate();
+                // 读取所有主题目录
+                string themeRoot = _curConfig.BaseFolder + WizardConfig.THEME_FOLDER;
+                int lastSelected = ShowNameList(themeRoot, lstTemplate, _curConfig.ThemeName);
+
+                // 恢复上次选中的结果，没有选择强制选中默认主题
+                if (lastSelected < 0) lastSelected = 0;
+                lstTemplate.SelectedIndex = lastSelected;
+
+                lstTemplate.EndUpdate();
+
+                return lstTemplate.Items.Count > 0;
+            }
         }
 
-        void OnStep2()
+        bool OnStep2()
         {
-            ProjectProperty info = _curConfig.ReadThemeInfo();
-
-            txtResolution.Text = "原始分辨率：";
-
-            // 第二步的说明窗口，目前也只有这么一个属性可以显示
-            string name = _curConfig.IsDefaultTheme ? WizardConfig.NAME_DEFAULT_THEME : _curConfig.ThemeName;
-            txtResolution.Text += string.Format("{0}{0}【{3}】 {1}x{2}",
-                                               Environment.NewLine, info.width, info.height, name);
-
-            // 是否选择了默认主题，没选则附加默认主题属性
-            if (!_curConfig.IsDefaultTheme)
+            if (_curConfig.IsModifyProject)
             {
-                ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
+                ProjectProperty info = _curConfig.ProjectInfo;
+
+                txtResolution.Text = "项目原始分辨率：";
+
+                // 第二步的说明窗口，目前也只有这么一个属性可以显示
                 txtResolution.Text += string.Format("{0}{0}【{3}】 {1}x{2}",
-                    Environment.NewLine, baseInfo.width, baseInfo.height, WizardConfig.NAME_DEFAULT_THEME);
+                                                   Environment.NewLine, info.width, info.height, _curConfig.ProjectName);
 
-                txtResolution.Text += string.Format("{0}{0}注意：【{2}】将覆盖【{1}】中的同名文件。",
-                                               Environment.NewLine, WizardConfig.NAME_DEFAULT_THEME, name);
-            }    
+                // 显示项目所有文件
+                ShowFiles(_curConfig.ProjectFolder);
+            }
+            else
+            {
+                ProjectProperty info = _curConfig.ThemeInfo;
 
-            // 这里本来应该根据缩放策略配置来显示每个文件如何缩放
-            // 先简单列一下文件和目录吧……
-            LoadThemeFiles();
+                txtResolution.Text = "主题原始分辨率：";
+
+                // 第二步的说明窗口，目前也只有这么一个属性可以显示
+                string name = _curConfig.IsDefaultTheme ? WizardConfig.NAME_DEFAULT_THEME : _curConfig.ThemeName;
+                txtResolution.Text += string.Format("{0}{0}【{3}】 {1}x{2}",
+                                                   Environment.NewLine, info.width, info.height, name);
+
+                // 是否选择了默认主题，没选则附加默认主题属性
+                if (!_curConfig.IsDefaultTheme)
+                {
+                    ProjectProperty baseInfo = _curConfig.ReadBaseTemplateInfo();
+                    txtResolution.Text += string.Format("{0}{0}【{3}】 {1}x{2}",
+                        Environment.NewLine, baseInfo.width, baseInfo.height, WizardConfig.NAME_DEFAULT_THEME);
+
+                    txtResolution.Text += string.Format("{0}{0}注意：【{2}】将覆盖【{1}】中的同名文件。",
+                                                   Environment.NewLine, WizardConfig.NAME_DEFAULT_THEME, name);
+                }
+
+                // 这里本来应该根据缩放策略配置来显示每个文件如何缩放
+                // 先简单列一下文件和目录吧……
+                ShowFiles(_curConfig.ThemeFolder);
+            }
 
             // 调用下测试用的函数
             test();
+
+            return true;
         }
 
-        void OnStep3()
+        bool OnStep3()
         {
             // 保存上一步的结果
             _curConfig._width = (int)numWidth.Value;
@@ -283,9 +310,16 @@ namespace Wizard
             
             txtProjectName.SelectAll();
             txtProjectName.Focus();
+
+            // 修改分辨率的话不允许修改项目名称
+            txtProjectName.Enabled = !_curConfig.IsModifyProject;
+            txtFolderName.Enabled = !_curConfig.IsModifyProject;
+            checkFolder.Enabled = !_curConfig.IsModifyProject;
+
+            return true;
         }
 
-        void OnStep4()
+        bool OnStep4()
         {
             // 保存上一步的结果
             _curConfig.ProjectName = txtProjectName.Text;
@@ -304,6 +338,8 @@ namespace Wizard
             btnOK.Show();
             btnOK.Focus();
             btnExit.Hide();
+
+            return btnOK.Enabled;
         }
 
         void OnBuild()
@@ -340,7 +376,7 @@ namespace Wizard
                 btnExit.Show();
                 btnExit.Enabled = true;
 
-                ReportAppend("项目创建完毕！");
+                ReportAppend("项目" + CurOP + "完毕！");
             }
             catch (System.Exception e)
             {
@@ -394,24 +430,59 @@ namespace Wizard
             }));
         }
 
-        // 读了主题目录中所有的目录和根目录下的文件
-        private void LoadThemeFiles()
+        // 读取项目或者主题列表，返回上一次选中的索引值
+        private int ShowNameList(string root, ListBox lst, string lastSelect)
         {
-            // 主题的Data目录
-            string theme = _curConfig.ThemeFolder;
+            // 刷新目录列表
+            int selected = -1;
+            lastSelect = lastSelect.ToLower();
+            
+            try
+            {
+                string[] themes = Directory.GetDirectories(root);
+                foreach (string theme in themes)
+                {
+                    // 只留目录名
+                    string name = Path.GetFileName(theme);
+                    
+                    // 忽略默认模板主题名称
+                    if(name.ToLower() == WizardConfig.PROJECT_DEFAULT_THEME)
+                    {
+                        continue;
+                    }
 
+                    lst.Items.Add(name);
+
+                    // 匹配第一个目录名相同的主题作为选中项，返回的时候保持选项正确
+                    if (selected < 0 && lastSelect == name)
+                    {
+                        selected = lst.Items.Count - 1;
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                // 出错了就不管啦
+            }
+
+            return selected;
+        }
+
+        // 显示某个目录下所有文件到列表控件
+        private void ShowFiles(string root)
+        {
             try
             {
                 lstScale.BeginUpdate();
                 lstScale.Items.Clear();
 
                 // 读取主题目录下的文件列表
-                string[] subDirs = Directory.GetDirectories(theme);
+                string[] subDirs = Directory.GetDirectories(root);
                 foreach (string dir in subDirs)
                 {
                     lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
                 }
-                string[] files = Directory.GetFiles(theme);
+                string[] files = Directory.GetFiles(root);
                 foreach (string file in files)
                 {
                     lstScale.Items.Add(Path.GetFileName(file));
@@ -421,11 +492,11 @@ namespace Wizard
             catch (System.Exception e) { }
         }
 
-        private void LoadProjectProperty()
+        // 在界面上显示读取的属性内容
+        private void ShowProperty(ProjectProperty info)
         {
             // 读取项目说明
-            ProjectProperty info = _curConfig.ReadThemeInfo();
-            txtTemplate.Text = info.readme;
+            txtReadme.Text = info.readme;
             txtProjectName.Text = info.title;
 
             // 选定分辨率
@@ -439,6 +510,12 @@ namespace Wizard
                     break;
                 }
             }
+        }
+
+        // 当前的操作关键词
+        private string CurOP
+        {
+            get { return _curConfig.IsModifyProject ? "修改" : "创建"; }
         }
 
         // 标记是否在操作下拉列表，防止和数字选择控件相互调用
@@ -497,11 +574,28 @@ namespace Wizard
                 string lastSelect = lstTemplate.SelectedItem as string;
                 theme = lastSelect.Trim();
             }
-            
-            if(theme != _curConfig.ThemeName)
+
+            if (theme != _curConfig.ThemeName || theme == string.Empty)
             {
                 _curConfig.ThemeName = theme;
-                LoadProjectProperty();
+                ShowProperty(_curConfig.ThemeInfo);
+            }
+        }
+
+        private void lstProject_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // 记录选取的项目目录
+            string project = string.Empty;
+            if (lstProject.SelectedIndex >= 0)
+            {
+                string lastSelect = lstProject.SelectedItem as string;
+                project = lastSelect.Trim();
+            }
+
+            if (project != _curConfig.ProjectName)
+            {
+                _curConfig.ProjectName = project;
+                ShowProperty(_curConfig.ProjectInfo);
             }
         }
 
@@ -509,7 +603,7 @@ namespace Wizard
         {
             if(!btnExit.Enabled)
             {
-                MessageBox.Show("正在创建项目，请稍候……", (_titleSaved != null) ? _titleSaved : this.Text);
+                MessageBox.Show("正在" + CurOP + "项目，请稍候……", (_titleSaved != null) ? _titleSaved : this.Text);
                 e.Cancel = true;
             }
         }
@@ -527,6 +621,23 @@ namespace Wizard
         void conv_LoggingEvent(WizardConverter sender, WizardConverter.MessageEventArgs e)
         {
             Logging(e.msg);
+        }
+
+        void tabSelect_Selected(object sender, TabControlEventArgs e)
+        {
+            if(e.TabPage == tabTemplate)
+            {
+                _curConfig.IsModifyProject = false;
+            }
+            else if(e.TabPage == tabProject)
+            {
+                _curConfig.IsModifyProject = true;
+            }
+
+            // 强制界面刷新
+            txtReadme.Text = "";
+            _curStep = -1;
+            this.Step += 1;
         }
     }
 }

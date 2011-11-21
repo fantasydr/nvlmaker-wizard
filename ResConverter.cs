@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Xml;
 using System.IO;
 using System.Xml.Serialization;
+using System.Drawing.Imaging;
 
 namespace Wizard
 {
@@ -146,6 +147,9 @@ namespace Wizard
             if (srcWidth <= 0 || srcHeight <= 0 || destWidth <= 0 || destHeight <= 0)
                 return;
 
+            if (srcWidth == destWidth && srcHeight == destHeight)
+                return;
+
             int cur = 0;
 
             // 以root为根目录载入所有图片并缩放
@@ -157,12 +161,6 @@ namespace Wizard
                 string inputFile = Path.GetFullPath(Path.Combine(baseDir, file.path));
                 string destFile = Path.GetFullPath(Path.Combine(destFolder, file.path));
 
-                if (destFile == inputFile)
-                {
-                    // 忽略同名文件错误
-                    continue;
-                }
-
                 // 选择质量参数
                 Quality q = Quality.HIGH;
                 if (file.quality.ToLower() == ResFile.QUALITY_LOW)
@@ -172,19 +170,25 @@ namespace Wizard
 
                 try
                 {
+                    Bitmap dest = null;
+                    ImageFormat format = null;
+
                     // 读取源图片
-                    Bitmap source = new Bitmap(inputFile);
+                    using (Bitmap source = new Bitmap(inputFile))
+                    {
+                        // 根据策略计算区域映射（尚未实现）
+                        Dictionary<Rectangle, Rectangle> rects =
+                            CalcRects(source, srcWidth, srcHeight, destWidth, destHeight);
 
-                    // 根据策略计算区域映射（尚未实现）
-                    Dictionary<Rectangle, Rectangle> rects =
-                        CalcRects(source, srcWidth, srcHeight, destWidth, destHeight);
+                        // 实施转换
+                        dest = Scale(source, srcWidth, srcHeight, destWidth, destHeight, q, rects);
 
-                    // 实施转换
-                    Bitmap dest = Scale(source, srcWidth, srcHeight, destWidth, destHeight, q, rects);
+                        format = source.RawFormat;
+                    }
 
                     if(dest != null)
                     {
-                        dest.Save(destFile, source.RawFormat);
+                        dest.Save(destFile, format);
                     }
 
                     // 转换完毕

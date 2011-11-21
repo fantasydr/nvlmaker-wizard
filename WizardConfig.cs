@@ -283,11 +283,13 @@ namespace Wizard
         public const string UI_LAYOUT = "macro\\ui*.tjs";
         public const string UI_SETTING = "macro\\setting.tjs";
         public const string UI_CONFIG = "Config.tjs";
+        public const string UI_README = "Readme.txt";
 
         public const int DEFAULT_WIDTH = 1024;
         public const int DEFAULT_HEIGHT = 768;
 
         public const string NAME_DEFAULT_THEME = "默认主题";
+        public const string PROJECT_DEFAULT_THEME = "template";
 
         // 忽略指定的图片文件
         const string PIC_IGNORE1 = @"data\system";
@@ -312,8 +314,11 @@ namespace Wizard
         private string _scaler = ResFile.SCALER_DEFAULT; // 缩放策略，目前只有这种:(
         private string _quality = ResFile.QUALITY_DEFAULT;   // 缩放质量，默认是高
 
+        // 是否处在项目编辑模式
+        private bool _modifyproject = false;
+
         // 储存上次读取的主体属性，避免多次读取
-        private ProjectProperty _themeInfo = null;
+        private ProjectProperty _info = null;
         #endregion
 
         // nvlmaker根路径
@@ -349,6 +354,23 @@ namespace Wizard
             }
         }
 
+        // 是否处在编辑项目模式
+        public bool IsModifyProject
+        {
+            get { return _modifyproject; }
+            set
+            {
+                if (_modifyproject != value)
+                {
+                    this._modifyproject = value;
+                    this._info = null;
+
+                    this.ThemeName = string.Empty;
+                    this.ProjectName = string.Empty;
+                }
+            }
+        }
+
         // 主题名称
         public string ThemeName
         {
@@ -365,7 +387,7 @@ namespace Wizard
                 if(themeName != _themeName)
                 {
                     this._themeName = themeName;
-                    this._themeInfo = null;
+                    this._info = null;
                 }
             }
         }
@@ -412,6 +434,12 @@ namespace Wizard
             }
         }
 
+        // 所选主题的属性
+        public ProjectProperty ThemeInfo
+        {
+            get { return ReadInfo(this.ThemeDataFolder, this.ThemeSetting); }
+        }
+
         // 目标项目路径
         public string ProjectFolder
         {
@@ -456,6 +484,21 @@ namespace Wizard
             }
         }
 
+        // 项目配置文件
+        public string ProjectSetting
+        {
+            get
+            {
+                return Path.Combine(this.ProjectDataFolder, UI_SETTING);
+            }
+        }
+
+        // 所选项目的属性
+        public ProjectProperty ProjectInfo
+        {
+            get { return ReadInfo(this.ProjectDataFolder, this.ProjectSetting); }
+        }
+
         // 检查这个配置是否已经完备，把出错信息写入output
         public bool IsReady(TextWriter output)
         {
@@ -480,38 +523,50 @@ namespace Wizard
                     if (output != null) output.WriteLine("错误：无效的项目名称。");
                     return false;
                 }
-                else if (Directory.Exists(path))
+                else if (!this.IsModifyProject && Directory.Exists(path))
                 {
                     if (output != null) output.WriteLine("错误：项目文件夹已存在，请更换项目名或设置其他路径。");
                     return false;
                 }
 
-                path = this.ThemeFolder;
-                if (!string.IsNullOrEmpty(path))
+                if (this.IsModifyProject)
                 {
-                    if (!Directory.Exists(path))
+                    ProjectProperty info = ProjectInfo;
+                    if (info == null || (info.width == this._width && info.height == this._height))
                     {
-                        if (output != null) output.WriteLine("错误：主题目录不存在。");
+                        if (output != null) output.WriteLine("错误：项目分辨率未改动，不需要进行转换");
                         return false;
                     }
-
-                    path = this.ThemeSetting;
-                    if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                }
+                else
+                {
+                    path = this.ThemeFolder;
+                    if (!string.IsNullOrEmpty(path))
                     {
-                        if (output != null) output.WriteLine("警告：主题缺少配置文件");
+                        if (!Directory.Exists(path))
+                        {
+                            if (output != null) output.WriteLine("错误：主题目录不存在。");
+                            return false;
+                        }
+
+                        path = this.ThemeSetting;
+                        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                        {
+                            if (output != null) output.WriteLine("警告：主题缺少配置文件");
+                        }
                     }
-                }
 
-                ProjectProperty info = ReadThemeInfo();
-                if(info == null || info.height <= 0 || info.width <= 0)
-                {
-                    if (output != null) output.WriteLine("警告：主题分辨率错误。");
-                }
+                    ProjectProperty info = ThemeInfo;
+                    if (info == null || info.height <= 0 || info.width <= 0)
+                    {
+                        if (output != null) output.WriteLine("警告：主题分辨率错误。");
+                    }
 
-                ProjectProperty baseInfo = ReadBaseTemplateInfo();
-                if (baseInfo != info && (baseInfo == null || baseInfo.height <= 0 || baseInfo.width <= 0))
-                {
-                    if (output != null) output.WriteLine("警告：默认主题分辨率错误。");
+                    ProjectProperty baseInfo = ReadBaseTemplateInfo();
+                    if (baseInfo != info && (baseInfo == null || baseInfo.height <= 0 || baseInfo.width <= 0))
+                    {
+                        if (output != null) output.WriteLine("警告：默认主题分辨率错误。");
+                    }
                 }
 
                 // 生成配置报告
@@ -533,18 +588,35 @@ namespace Wizard
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
-            sb.AppendFormat("== 项目配置清单 =="); sb.Append(Environment.NewLine);
-
-            sb.Append(Environment.NewLine);
-            string theme = (this.IsDefaultTheme) ? NAME_DEFAULT_THEME : this.ThemeName;
-            sb.AppendFormat("所选主题：{0}", theme); sb.Append(Environment.NewLine);
-            sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height); 
-            ProjectProperty info = ReadThemeInfo();
-            if(info.width != _width || info.height != this._height)
+            if (this.IsModifyProject)
             {
-                sb.AppendFormat(" (非原始分辨率)");
+                sb.AppendFormat("【修改项目配置清单】"); sb.Append(Environment.NewLine);
+
+                sb.Append(Environment.NewLine);
+                ProjectProperty info = this.ProjectInfo;
+                sb.AppendFormat("原始分辨率：{0}x{1}", info.width, info.height);sb.Append(Environment.NewLine);
+                sb.AppendFormat("目标分辨率：{0}x{1}", this._width, this._height);
+                if (info.width != _width || info.height != this._height)
+                {
+                    sb.AppendFormat(" (分辨率已修改)");
+                }
+                sb.Append(Environment.NewLine);
             }
-            sb.Append(Environment.NewLine);
+            else
+            {
+                sb.AppendFormat("【创建项目配置清单】"); sb.Append(Environment.NewLine);
+
+                sb.Append(Environment.NewLine);
+                string theme = (this.IsDefaultTheme) ? NAME_DEFAULT_THEME : this.ThemeName;
+                sb.AppendFormat("所选主题：{0}", theme); sb.Append(Environment.NewLine);
+                sb.AppendFormat("分辨率设定：{0}x{1}", this._width, this._height);
+                ProjectProperty info = this.ThemeInfo;
+                if (info.width != _width || info.height != this._height)
+                {
+                    sb.AppendFormat(" (非原始分辨率)");
+                }
+                sb.Append(Environment.NewLine);
+            }
 
             sb.Append(Environment.NewLine);
             sb.AppendFormat("项目名称：{0}", this._projectName);sb.Append(Environment.NewLine);
@@ -557,22 +629,22 @@ namespace Wizard
             return sb.ToString();
         }
 
-        // 读取所选主题的属性
-        public ProjectProperty ReadThemeInfo()
+        // 从Data目录下读取属性
+        private ProjectProperty ReadInfo(string dataFolder, string setting)
         {
-            // 直接返回读取值
-            if (this._themeInfo != null)
+            // 直接返回上一次读取的值
+            if (this._info != null)
             {
-                return this._themeInfo;
+                return this._info;
             }
 
             ProjectProperty info = new ProjectProperty();
-            this._themeInfo = info;
+            this._info = info;
 
             // 读取readme文件作为显示内容
             try
             {
-                string readmefile = Path.Combine(this.ThemeDataFolder, "Readme.txt");
+                string readmefile = Path.Combine(dataFolder, UI_README);
                 if (File.Exists(readmefile))
                 {
                     using (StreamReader r = new StreamReader(readmefile))
@@ -580,23 +652,34 @@ namespace Wizard
                         info.readme = r.ReadToEnd();
                     }
                 }
+                else
+                {
+                    string configfile = Path.Combine(dataFolder, UI_CONFIG);
+                    if (File.Exists(configfile))
+                    {
+                        using (StreamReader r = new StreamReader(configfile))
+                        {
+                            info.readme = r.ReadToEnd();
+                        }
+                    }
+                }
             }
             catch (System.Exception e)
             {
                 // 出错的不保留
-                this._themeInfo = null;
+                this._info = null;
                 info.readme = e.Message;
             }
 
             // 读取设置文件
             try
             {
-                info.LoadSetting(this.ThemeSetting);
+                info.LoadSetting(setting);
             }
             catch (System.Exception e)
             {
                 // 出错的不保留
-                this._themeInfo = null;
+                this._info = null;
                 info.readme = e.Message;
             }
             
@@ -609,7 +692,7 @@ namespace Wizard
             // 如果选的是默认的主题，则返回主题属性
             if(this.IsDefaultTheme)
             {
-                return this.ReadThemeInfo();
+                return this.ThemeInfo;
             }
 
             // 这里就不读readme了，也不做保存，每次调用都从文件读一次
@@ -673,42 +756,62 @@ namespace Wizard
         // 根据配置创建目标项目
         public void Start()
         {
-            // 从配置中读取需要的源大小和目标大小
-            int dw = _config._width, dh = _config._height;
-
-            // 先从基础模板目录拷贝文件到项目目录
-            string template = _config.BaseTemplateFolder;
-            string project = _config.ProjectFolder;
-
-            // 读取基础模板的配置
-            ProjectProperty baseInfo = _config.ReadBaseTemplateInfo();
-
-            int sw = baseInfo.width;
-            if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
-            int sh = baseInfo.height;
-            if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
-
-            ConvertFiles(template, sw, sh, project, dw, dh);
-
-            // 修正所有坐标，写入项目名称
-            AdjustSettings(sw, sh);
-
-            // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
-            if (_config.ThemeFolder != template)
+            if (_config.IsModifyProject)
             {
-                // 读取所选主题配置
-                ProjectProperty themeInfo = _config.ReadThemeInfo();
+                // 从配置中读取目标大小
+                int dw = _config._width, dh = _config._height;
 
-                sw = themeInfo.width;
+                // 从项目自身的文件夹转换
+                string project = _config.ProjectFolder;
+
+                // 读取项目原始配置
+                ProjectProperty projInfo = _config.ProjectInfo;
+                int sw = projInfo.width, sh = projInfo.height;
+
+                ConvertFiles(project, sw, sh, project, dw, dh);
+
+                // 修正所有坐标
+                AdjustSettings(sw, sh);
+            }
+            else
+            {
+                // 从配置中读取目标大小
+                int dw = _config._width, dh = _config._height;
+
+                // 先从基础模板目录拷贝文件到项目目录
+                string template = _config.BaseTemplateFolder;
+                string project = _config.ProjectFolder;
+
+                // 读取基础模板的配置
+                ProjectProperty baseInfo = _config.ReadBaseTemplateInfo();
+
+                int sw = baseInfo.width;
                 if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
-                sh = themeInfo.height;
+                int sh = baseInfo.height;
                 if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
 
-                // 主题的文件直接拷入数据目录
-                ConvertFiles(_config.ThemeFolder, sw, sh, _config.ProjectDataFolder, dw, dh);
+                ConvertFiles(template, sw, sh, project, dw, dh);
 
                 // 修正所有坐标，写入项目名称
                 AdjustSettings(sw, sh);
+
+                // 如果选择了非默认主题，再从主题目录拷贝文件到项目资料文件夹
+                if (_config.ThemeFolder != template)
+                {
+                    // 读取所选主题配置
+                    ProjectProperty themeInfo = _config.ThemeInfo;
+
+                    sw = themeInfo.width;
+                    if (sw <= 0) sw = WizardConfig.DEFAULT_WIDTH;
+                    sh = themeInfo.height;
+                    if (sh <= 0) sh = WizardConfig.DEFAULT_HEIGHT;
+
+                    // 主题的文件直接拷入数据目录
+                    ConvertFiles(_config.ThemeFolder, sw, sh, _config.ProjectDataFolder, dw, dh);
+
+                    // 修正所有坐标，写入项目名称
+                    AdjustSettings(sw, sh);
+                }
             }
         }
 
@@ -719,6 +822,8 @@ namespace Wizard
             List<string> srcFiles = new List<string>();
             try
             {
+                bool ignoreCopy = (srcPath.ToLower() == destPath.ToLower());
+
                 // 建立目录并获取文件列表
                 CreateDir(srcPath, destPath, srcFiles);
 
@@ -747,7 +852,7 @@ namespace Wizard
                         // 是图片则添加到转换器中
                         resource.files.Add(new ResFile(relFile));
                     }
-                    else
+                    else if (!ignoreCopy)
                     {
                         // 直接拷贝
                         OnLogging(string.Format("拷贝{0}", relFile));
