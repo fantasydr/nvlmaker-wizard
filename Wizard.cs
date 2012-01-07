@@ -480,6 +480,8 @@ namespace Wizard
                 string[] subDirs = Directory.GetDirectories(root);
                 foreach (string dir in subDirs)
                 {
+                    // ºöÂÔ.svnÄ¿Â¼
+                    if (dir.StartsWith(".")) continue;
                     lstScale.Items.Add(string.Format("<dir> {0}", Path.GetFileName(dir)));
                 }
                 string[] files = Directory.GetFiles(root);
