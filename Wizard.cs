@@ -595,7 +595,9 @@ namespace Wizard
             if (project != _curConfig.ProjectName)
             {
                 _curConfig.ProjectName = project;
+                _curConfig.ProjectFolder = project;
                 ShowProperty(_curConfig.ProjectInfo);
+                txtFolderName.Text = project;
             }
         }
 
