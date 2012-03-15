@@ -93,7 +93,8 @@ namespace Wizard
                 double ret = double.NaN;
                 if (setting != null)
                 {
-                    ret = setting.GetNumber("width");
+                    TjsValue val = setting.GetValue("width");
+                    if (val != null) ret = val.ToDouble();
                 }
                 return double.IsNaN(ret) ? 0 : (int)ret;
             }
@@ -107,7 +108,8 @@ namespace Wizard
                 double ret = double.NaN;
                 if (setting != null)
                 {
-                    ret = setting.GetNumber("height");
+                    TjsValue val = setting.GetValue("height");
+                    if (val != null) ret = val.ToDouble();
                 }
                 return double.IsNaN(ret) ? 0 : (int)ret;
             }
@@ -121,11 +123,8 @@ namespace Wizard
                 double ret = double.NaN;
                 if (setting != null)
                 {
-                    TjsString str = setting.GetValue("savedata/thumbnailwidth") as TjsString;
-                    if (str != null)
-                    {
-                        double.TryParse(str.val, out ret);
-                    }
+                    TjsValue val = setting.GetValue("savedata/thumbnailwidth");
+                    if(val != null) ret = val.ToDouble();
                 }
                 return double.IsNaN(ret) ? 0 : (int)ret;
             }
@@ -149,7 +148,8 @@ namespace Wizard
     {
         public static double ScaleInteger(TjsDict dict, string name, double scale)
         {
-            double num = dict.GetNumber(name);
+            TjsValue val = dict.GetValue(name);
+            double num = (val != null) ? val.ToDouble() : double.NaN;
             if (!double.IsNaN(num))
             {
                 num = num * scale;

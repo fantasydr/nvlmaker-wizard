@@ -52,6 +52,11 @@ namespace Tjs
                 w.Write(this.ToString());
             }
         }
+
+        public virtual double ToDouble()
+        {
+            return double.NaN;
+        }
     }
 
     // ¿ÕÖµ
@@ -83,6 +88,13 @@ namespace Tjs
         {
             return string.Format("\"{0}\"", this.val);
         }
+
+        public override double ToDouble()
+        {
+            double ret = double.NaN;
+            if (this.val != null) double.TryParse(this.val, out ret);
+            return ret;
+        }
     }
 
     // Êý×Ö
@@ -99,6 +111,11 @@ namespace Tjs
         public override string ToString()
         {
             return this.val.ToString();
+        }
+
+        public override double ToDouble()
+        {
+            return this.val;
         }
     }
 

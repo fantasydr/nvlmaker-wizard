@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("mega-zone")]
 [assembly: AssemblyProduct("NVLMaker")]
-[assembly: AssemblyCopyright("Copyright © mega-zone 2011, Based on icons by Paul Davey aka Mattahan. All rights reserved.")]
+[assembly: AssemblyCopyright("Copyright © mega-zone 2012, Based on icons by Paul Davey aka Mattahan. All rights reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
