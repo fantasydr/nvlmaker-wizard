@@ -144,7 +144,8 @@ namespace Tjs
             // 当前默认缩进
             string currentIndent = _indentStack;
 
-            buf.AppendLine("(const) [");
+            //buf.AppendLine("(const) [");
+			buf.AppendLine("["); // 兼容2.28
             int count = 0;
             foreach (TjsValue v in this.val)
             {
@@ -273,7 +274,8 @@ namespace Tjs
             // 当前默认缩进
             string currentIndent = _indentStack;
 
-            buf.AppendLine("(const) %[");
+            //buf.AppendLine("(const) %[");
+			buf.AppendLine("%["); // 兼容2.28
             int count = 0;
             foreach (KeyValuePair<string, TjsValue> kv in this.val)
             {
@@ -729,7 +731,8 @@ namespace Tjs
                 }
                 else if(token.t == TokenType.Symbol)
                 {
-                    if(token.val == "(const)")
+				    // 兼容2.28
+                    if(token.val == "(const)" || token.val == "int" || token.val == "string")
                     {
                         // 啥也不干
                     }
