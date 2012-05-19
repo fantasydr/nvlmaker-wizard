@@ -632,6 +632,7 @@ namespace Wizard
             if(e.TabPage == tabTemplate)
             {
                 _curConfig.IsModifyProject = false;
+                _curConfig.ProjectFolder = string.Empty;
             }
             else if(e.TabPage == tabProject)
             {
